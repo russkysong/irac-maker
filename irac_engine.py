@@ -359,13 +359,6 @@ def socratic_next_question(facts: str, area: str, history: list[dict]) -> str:
     return resp["message"]["content"].strip()
 
 
-def zoom_out(facts: str, area: str) -> str:
-    """Returns a plain-text issue map — no IRAC, just a structured overview."""
-    prompt = ZOOM_OUT_PROMPT.format(area=area, facts=facts.strip())
-    resp = _chat(ZOOM_OUT_SYSTEM, prompt, use_json=False)
-    return resp["message"]["content"].strip()
-
-
 def stream_zoom_out(facts: str, area: str):
     """
     Streaming variant of zoom_out — yields (token_text, accumulated_text, count)

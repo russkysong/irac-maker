@@ -1,8 +1,9 @@
+import html
 import streamlit as st
 import styles
 import components as C
 from irac_engine import (
-    generate_dual_irac, compare_irac,
+    compare_irac,
     socratic_next_question, check_model_ready, AREAS_OF_LAW,
 )
 from export import export_to_pdf
@@ -477,7 +478,7 @@ with tab_soc:
         with st.expander("View Hypo", expanded=False):
             st.markdown(
                 f'<div style="font-family:Lora,serif;font-style:italic;color:#b0aea5;">'
-                f'{st.session_state.socratic_facts}</div>',
+                f'{html.escape(st.session_state.socratic_facts)}</div>',
                 unsafe_allow_html=True,
             )
 

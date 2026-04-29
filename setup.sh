@@ -20,8 +20,13 @@ ollama create irac-maker -f "$SCRIPT_DIR/Modelfile"
 
 # Install Python deps
 echo "Installing Python dependencies..."
+if [ ! -d ".venv" ]; then
+  python3 -m venv .venv
+fi
+source .venv/bin/activate
 pip install -r requirements.txt
 
 echo ""
 echo "Setup complete. Run the app with:"
+echo "  source .venv/bin/activate"
 echo "  streamlit run app.py"
