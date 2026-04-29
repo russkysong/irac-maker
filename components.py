@@ -6,7 +6,7 @@ from models import IRRACOutput
 # ── Word count targets per IRAC section ───────────────────────────────────────
 WORD_TARGETS = {
     "issue":       (30,  80,  "1–2 sentences"),
-    "rule":        (80,  200, "2–4 paragraphs"),
+    "rule":        (120, 300, "2–4 paragraphs"),
     "application": (200, 500, "bulk of analysis"),
     "conclusion":  (25,  60,  "1–2 sentences"),
 }
@@ -19,8 +19,10 @@ SECTION_TIPS = {
     ),
     "rule": (
         "Rule tip",
-        "Cite a specific source: Restatement (Second) of Contracts § 71, UCC § 2-207, "
-        "or a landmark case name + year. 'The law requires...' earns no citation credit."
+        "Cover two parts: (1) <strong>Rule Statement</strong> — the rule with a specific citation "
+        "(Restatement § #, UCC § #, or landmark case + year). "
+        "(2) <strong>Rule Exploration</strong> — how courts have interpreted it: key cases, "
+        "majority vs minority views, circuit splits. 'The law requires...' earns no citation credit."
     ),
     "application": (
         "Application tip",
@@ -403,7 +405,7 @@ def starter_template(section: str) -> str:
     """Returns a starter sentence template for each IRAC section."""
     templates = {
         "issue": "Whether [party A] can [claim/defense] against [party B] for [legal theory] given [key fact].",
-        "rule": "Under [Restatement (Second) of Contracts § __] / [UCC § __] / [[Case Name], [Year]], [state the rule]. The elements are: (1) [element 1]; (2) [element 2]; (3) [element 3].",
+        "rule": "Under [Restatement (Second) of Contracts § __] / [UCC § __] / [[Case Name], [Year]], [state the rule]. The elements are: (1) [element 1]; (2) [element 2]; (3) [element 3].\n\nCourts have interpreted this rule to [majority view]. A minority of jurisdictions [minority view]. In [Key Case, Year], the court held [relevant interpretation].",
         "application": "Element 1: [Element Name]\n[Apply the rule to the specific facts. Quote or paraphrase key facts. Counter-argument: [opposing party] may argue [X], however [refutation].]\n\nElement 2: [Element Name]\n[Continue analysis...]",
         "conclusion": "Therefore, [party] will likely [prevail/not prevail] on a claim for [theory]. Confidence: [High/Moderate/Low] — [one-sentence reason].",
     }
