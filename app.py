@@ -5,6 +5,7 @@ import streamlit as st
 import styles
 import components as C
 import outlines
+import history
 from irac_engine import (
     compare_irac,
     socratic_next_question, check_model_ready, AREAS_OF_LAW,
@@ -42,9 +43,9 @@ for k, v in DEFAULTS.items():
         st.session_state[k] = v
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_gen, tab_brief, tab_both, tab_cmp, tab_soc, tab_outlines, tab_about = st.tabs([
+tab_gen, tab_brief, tab_both, tab_cmp, tab_soc, tab_outlines, tab_history, tab_about = st.tabs([
     "Generate IRAC", "Case Brief", "Both Sides", "Compare & Feedback",
-    "Socratic Mode", "My Outlines", "About",
+    "Socratic Mode", "My Outlines", "History", "About",
 ])
 
 
@@ -101,6 +102,12 @@ with tab_gen:
                 st.session_state.last_irac = result
                 st.session_state.last_facts = facts_gen
                 st.session_state.last_area = area_gen
+                # Auto-save to ~/.iracmaker/history/. Failures here shouldn't
+                # block showing the IRAC, so swallow exceptions silently.
+                try:
+                    history.save_irac(facts_gen, area_gen, result.model_dump())
+                except Exception:
+                    pass
                 C.show_irreac(result)
                 st.divider()
                 pdf_bytes = export_to_pdf(result, facts_gen, area_gen)
@@ -194,6 +201,10 @@ with tab_brief:
             try:
                 brief = C.stream_brief_with_progress(case_text)
                 st.session_state.last_brief = brief
+                try:
+                    history.save_brief(case_text, brief.model_dump())
+                except Exception:
+                    pass
                 C.show_case_brief(brief)
             except Exception as e:
                 st.error(f"Brief failed: {e}")
@@ -747,7 +758,136 @@ with tab_outlines:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 7 — ABOUT
+# TAB 7 — HISTORY
+# ════════════════════════════════════════════════════════════════════════════════
+from models import IRRACOutput as _IRRACOutput, CaseBrief as _CaseBrief
+
+with tab_history:
+    st.markdown("""
+<div class="irac-card irac-card-accent" style="margin-bottom:1.5rem;">
+    <div class="section-label">History</div>
+    <p style="margin:0;font-size:14px;color:#b0aea5;line-height:1.7;">
+        Every IRAC and Case Brief you generate is auto-saved to this computer.
+        Search, reopen, or delete any past entry. Stored locally under
+        <code style="background:#0d0d0c;padding:1px 6px;border-radius:3px;">~/.iracmaker/history/</code>.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    # ── Filters ────────────────────────────────────────────────────────────────
+    col_q, col_t, col_clear = st.columns([3, 2, 1])
+    with col_q:
+        history_query = st.text_input(
+            "Search", placeholder="Search by issue, case name, or content...",
+            key="history_query", label_visibility="collapsed",
+        )
+    with col_t:
+        history_type = st.pills(
+            "Type",
+            ["all", "irac", "brief"],
+            default="all",
+            key="history_type",
+            format_func=lambda x: {"all": "All", "irac": "IRACs", "brief": "Briefs"}[x],
+            label_visibility="collapsed",
+        ) or "all"
+    with col_clear:
+        st.write("")  # spacer for vertical alignment
+        cleared = st.button("Clear", use_container_width=True, key="history_clear_filters")
+        if cleared:
+            for k in ("history_query", "history_type"):
+                if k in st.session_state:
+                    del st.session_state[k]
+            st.rerun()
+
+    entries = history.filter_history(query=history_query, entry_type=history_type)
+
+    if not entries:
+        st.markdown("""
+<div class="irac-card" style="text-align:center;padding:2.5rem 1.5rem;border-style:dashed;">
+    <div style="font-size:1.6rem;margin-bottom:0.6rem;">📓</div>
+    <div style="font-family:Poppins,sans-serif;font-size:13px;color:#b0aea5;">
+        Nothing saved yet. Generate an IRAC or Case Brief — it'll show up here automatically.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+    else:
+        st.caption(f"{len(entries)} entr{'y' if len(entries)==1 else 'ies'} found.")
+        for entry in entries:
+            entry_id = entry.get("id", "")
+            entry_type_v = entry.get("type", "irac")
+            type_color = "#d97757" if entry_type_v == "irac" else "#6a9bcc"
+            type_label = "IRAC" if entry_type_v == "irac" else "Brief"
+            area = entry.get("area")
+            saved_iso = entry.get("saved_at", "")
+            age = _humanize_age(saved_iso)
+            title = html.escape(entry.get("title", "(untitled)"))
+
+            type_badge = (
+                f'<span style="display:inline-block;background:{type_color}22;'
+                f'border:1px solid {type_color}55;color:{type_color};'
+                f'font-family:Poppins,sans-serif;font-size:10px;font-weight:700;'
+                f'letter-spacing:0.08em;text-transform:uppercase;'
+                f'padding:2px 9px;border-radius:999px;margin-right:8px;">{type_label}</span>'
+            )
+            area_badge = ""
+            if area:
+                area_badge = (
+                    f'<span style="display:inline-block;background:rgba(176,174,165,0.08);'
+                    f'border:1px solid rgba(176,174,165,0.2);color:#b0aea5;'
+                    f'font-family:Poppins,sans-serif;font-size:10px;font-weight:600;'
+                    f'letter-spacing:0.06em;text-transform:uppercase;'
+                    f'padding:2px 9px;border-radius:999px;margin-left:8px;">{html.escape(area)}</span>'
+                )
+
+            with st.expander(
+                f"**{entry.get('title', '(untitled)')}**  ·  {type_label}  ·  {age}",
+                expanded=False,
+            ):
+                st.markdown(
+                    f'<div style="margin-bottom:14px;">{type_badge}'
+                    f'<span style="font-family:Lora,serif;font-size:13px;color:#b0aea5;">'
+                    f'Saved {age}{" · " + html.escape(area) if area else ""}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+                result = entry.get("result", {})
+                try:
+                    if entry_type_v == "irac":
+                        if entry.get("facts"):
+                            with st.expander("Original facts", expanded=False):
+                                st.markdown(html.escape(entry["facts"]))
+                        C.show_irreac(_IRRACOutput(**result))
+                    else:  # brief
+                        if entry.get("case_text"):
+                            with st.expander("Original case text", expanded=False):
+                                st.markdown(html.escape(entry["case_text"][:5000]) +
+                                            ("…" if len(entry.get("case_text", "")) > 5000 else ""))
+                        C.show_case_brief(_CaseBrief(**result))
+                except Exception as e:
+                    st.error(f"Couldn't render this entry: {e}")
+                    st.json(result)
+
+                col_open, col_del = st.columns([4, 1])
+                with col_open:
+                    if entry_type_v == "irac" and st.button(
+                        "Reopen in Compare & Feedback",
+                        key=f"reopen_{entry_id}",
+                        use_container_width=True,
+                    ):
+                        st.session_state.last_irac = _IRRACOutput(**result)
+                        st.session_state.last_facts = entry.get("facts", "")
+                        st.session_state.last_area = area or "Contracts"
+                        st.toast("Loaded into Compare & Feedback tab.", icon="↗️")
+                with col_del:
+                    if st.button("Delete", key=f"hist_del_{entry_id}",
+                                 use_container_width=True):
+                        history.delete_entry(entry_id)
+                        st.rerun()
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# TAB 8 — ABOUT
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_about:
     # ── Modes (single-column stack) ────────────────────────────────────────────
@@ -788,6 +928,12 @@ with tab_about:
         <div class="section-label">My Outlines</div>
         <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
             Upload your own legally-purchased outlines (PDF, DOCX, TXT). They stay on this computer and get used as context when generating IRACs in matching areas of law — so the AI's analysis sounds like your outline, not a generic restatement.
+        </div>
+    </div>
+    <div class="irac-card" style="padding:16px 18px;border-left:3px solid #b0aea5;">
+        <div class="section-label" style="color:#b0aea5;">History</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Every IRAC and Case Brief you generate is auto-saved locally. Search, reopen, or delete past entries — nothing is ever sent off this computer.
         </div>
     </div>
 </div>
