@@ -80,7 +80,10 @@ with tab_gen:
 
     with col_left:
         st.markdown('<div class="section-label">Hypo Setup</div>', unsafe_allow_html=True)
-        area_gen = st.selectbox("Area of Law", AREAS_OF_LAW, key="area_gen")
+        area_gen = st.pills(
+            "Area of Law", AREAS_OF_LAW,
+            default="Contracts", key="area_gen",
+        ) or "Contracts"
         facts_gen = st.text_area(
             "Facts", height=260, key="facts_gen",
             placeholder=(
@@ -183,9 +186,12 @@ with tab_both:
 </div>
 """, unsafe_allow_html=True)
 
+    area_bs = st.pills(
+        "Area of Law", AREAS_OF_LAW,
+        default="Contracts", key="area_bs",
+    ) or "Contracts"
     col_bs, col_empty = st.columns([1, 2])
     with col_bs:
-        area_bs = st.selectbox("Area of Law", AREAS_OF_LAW, key="area_bs")
         facts_bs = st.text_area("Facts", height=180, key="facts_bs",
                                 placeholder="Paste the fact pattern here...")
         both_btn = st.button("Generate Both Sides", type="primary", use_container_width=True)
@@ -252,19 +258,15 @@ with tab_cmp:
     )
     is_manual = cmp_mode == "Compare against my own reference IRAC"
 
-    col_f, col_ar = st.columns([3, 1])
-    with col_f:
-        facts_cmp = st.text_area(
-            "Facts", height=110, key="facts_cmp",
-            value=st.session_state.last_facts,
-            placeholder="Paste the hypo facts here...",
-        )
-    with col_ar:
-        area_cmp = st.selectbox(
-            "Area of Law", AREAS_OF_LAW,
-            index=AREAS_OF_LAW.index(st.session_state.last_area),
-            key="area_cmp",
-        )
+    area_cmp = st.pills(
+        "Area of Law", AREAS_OF_LAW,
+        default=st.session_state.last_area, key="area_cmp",
+    ) or st.session_state.last_area
+    facts_cmp = st.text_area(
+        "Facts", height=110, key="facts_cmp",
+        value=st.session_state.last_facts,
+        placeholder="Paste the hypo facts here...",
+    )
 
     st.markdown('<div class="section-label" style="margin-top:1rem;">Your IRAC Draft</div>', unsafe_allow_html=True)
     st.caption("Write each section separately. Even a rough draft earns better feedback than a blank page.")
@@ -498,12 +500,15 @@ with tab_soc:
 """, unsafe_allow_html=True)
 
     if not st.session_state.socratic_started:
-        col_soc_f, col_soc_a = st.columns([3, 1])
+        soc_area = st.pills(
+            "Area of Law", AREAS_OF_LAW,
+            default="Contracts", key="soc_area_input",
+        ) or "Contracts"
+        col_soc_f, col_soc_btn = st.columns([3, 1])
         with col_soc_f:
             soc_facts = st.text_area("Facts", height=160, key="soc_facts_input",
                                       placeholder="Paste the hypo facts here...")
-        with col_soc_a:
-            soc_area = st.selectbox("Area of Law", AREAS_OF_LAW, key="soc_area_input")
+        with col_soc_btn:
             st.markdown("<br>", unsafe_allow_html=True)
             start_btn = st.button("Start Session", type="primary", use_container_width=True)
 
