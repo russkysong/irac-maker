@@ -13,12 +13,20 @@ st.set_page_config(page_title="IRAC Maker", page_icon="⚖️", layout="wide")
 styles.inject()
 
 # ── Header ─────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="irac-header">
+hdr_left, hdr_right = st.columns([3, 1], gap="small")
+with hdr_left:
+    st.markdown("""
+<div class="irac-header" style="border-bottom:none; margin-bottom:0;">
     <div class="irac-logo">⚖️ IRAC<span class="irac-logo-accent"> Maker</span></div>
     <div class="irac-tagline">AI-powered legal writing practice for law school students</div>
 </div>
 """, unsafe_allow_html=True)
+with hdr_right:
+    show_timer = st.toggle("⏱️ Bar Exam Timer", value=False, key="show_timer_global")
+    if show_timer:
+        timer_min = st.slider("Minutes", 30, 180, 90, 5, key="timer_min_global", label_visibility="collapsed")
+        C.render_timer(timer_min)
+st.markdown("<hr style='border-color:#2a2925;margin:0.5rem 0 1.25rem 0;'>", unsafe_allow_html=True)
 
 @st.cache_resource(show_spinner=False)
 def _model_ready_cached() -> bool:
@@ -71,13 +79,6 @@ with tab_gen:
             gen_btn = st.button("Generate IRAC", type="primary", use_container_width=True)
         with col_b:
             zoom_btn = st.button("Issue Map First", use_container_width=True, help="See all issues before full analysis")
-
-        st.divider()
-        st.markdown('<div class="section-label">Options</div>', unsafe_allow_html=True)
-        show_timer = st.toggle("Bar Exam Timer", value=False)
-        if show_timer:
-            timer_min = st.slider("Minutes", 30, 180, 90, 5)
-            C.render_timer(timer_min)
 
     with col_right:
         st.markdown('<div class="section-label">Analysis</div>', unsafe_allow_html=True)
