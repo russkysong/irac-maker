@@ -136,6 +136,25 @@ footer { display: none; }
     color: #b0aea5 !important;
 }
 
+/* ── Popover (used for Area-of-Law chip) ──────────────────────── */
+[data-testid="stPopover"] button {
+    background-color: #1e1d1b !important;
+    border: 1px solid #3a3830 !important;
+    color: #b0aea5 !important;
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    padding: 6px 14px !important;
+    border-radius: 999px !important;
+    transition: border-color 0.2s, color 0.2s !important;
+    width: auto !important;
+}
+[data-testid="stPopover"] button:hover {
+    border-color: #d97757 !important;
+    color: #faf9f5 !important;
+    transform: none !important;
+}
+
 /* ── Selectbox ────────────────────────────────────────────────── */
 [data-testid="stSelectbox"] > div > div {
     background-color: #1e1d1b !important;
