@@ -309,6 +309,44 @@ footer { display: none; }
 /* ── Dividers ─────────────────────────────────────────────────── */
 hr { border-color: #2a2925 !important; margin: 1.5rem 0 !important; }
 
+/* ── "How IRAC Works" table ───────────────────────────────────── */
+.how-irac-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #2a2925;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 0.5rem 0 1rem 0;
+    font-family: 'Lora', serif;
+    font-size: 15px;
+}
+.how-irac-table thead th {
+    background: #1e1d1b;
+    color: #faf9f5;
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #2a2925;
+}
+.how-irac-table tbody td {
+    padding: 12px 16px;
+    color: #e8e6dc;
+    line-height: 1.7;
+    border-bottom: 1px solid #2a2925;
+    vertical-align: top;
+}
+.how-irac-table tbody tr:last-child td { border-bottom: none; }
+.how-irac-table tbody td:first-child {
+    font-family: 'Poppins', sans-serif;
+    color: #faf9f5;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
 /* ── Chat messages ────────────────────────────────────────────── */
 [data-testid="stChatMessage"] {
     background-color: #1e1d1b !important;

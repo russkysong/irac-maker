@@ -123,17 +123,30 @@ with tab_gen:
     st.divider()
     st.markdown('<div class="section-label">How IRAC Works</div>', unsafe_allow_html=True)
     st.markdown("""
-**IRAC** is the standard legal reasoning framework used in American law schools and on the bar exam.
+<p style="font-family:Lora,serif;font-size:15px;color:#e8e6dc;line-height:1.7;">
+<strong>IRAC</strong> is the standard legal reasoning framework used in American law schools and on the bar exam.
+</p>
 
-| Step | What it covers |
-|---|---|
-| **I — Issue** | The precise legal question the court must answer |
-| **R — Rule** | The applicable rule with citation — statute, restatement section, or landmark case |
-| **A — Application** | Each rule element applied to the specific facts — **this is where exam points are won or lost** |
-| **C — Conclusion** | A direct answer to the Issue, with a confidence level |
+<table class="how-irac-table">
+    <colgroup>
+        <col style="width: 220px;">
+        <col>
+    </colgroup>
+    <thead>
+        <tr><th>Step</th><th>What it covers</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><strong>I — Issue</strong></td><td>The precise legal question the court must answer</td></tr>
+        <tr><td><strong>R — Rule</strong></td><td>The applicable rule with citation — statute, restatement section, or landmark case</td></tr>
+        <tr><td><strong>A — Application</strong></td><td>Each rule element applied to the specific facts — <strong>this is where exam points are won or lost</strong></td></tr>
+        <tr><td><strong>C — Conclusion</strong></td><td>A direct answer to the Issue, with a confidence level</td></tr>
+    </tbody>
+</table>
 
-**Note:** The AI breaks the Rule into two parts — what the rule says, and how courts have interpreted it. This gives you richer Rule analysis than a basic IRAC outline.
-""")
+<p style="font-family:Lora,serif;font-size:15px;color:#e8e6dc;line-height:1.7;margin-top:1rem;">
+<strong>Note:</strong> The AI breaks the Rule into two parts — what the rule says, and how courts have interpreted it. This gives you richer Rule analysis than a basic IRAC outline.
+</p>
+""", unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
