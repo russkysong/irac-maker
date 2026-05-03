@@ -48,70 +48,68 @@ tab_gen, tab_both, tab_cmp, tab_soc, tab_about = st.tabs([
 # TAB 1 — GENERATE
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_gen:
-    col_left, col_right = st.columns([1, 1], gap="large")
+    # ── Setup (full width, single column) ─────────────────────────────────────
+    _area = st.session_state.get("area_gen_value") or "Contracts"
+    if st.button(f"⚖️ Area of Law: {_area}", key="btn_area_gen"):
+        C.pick_area_dialog("area_gen_value")
+    area_gen = _area
+    facts_gen = st.text_area(
+        "Facts", height=260, key="facts_gen",
+        placeholder=(
+            "Paste or type your fact pattern here...\n\n"
+            "e.g. Alice offered to sell her 2020 Honda Civic for $12,000. "
+            "Bob replied '$11,500.' Alice said 'Deal at $11,800.' "
+            "Bob showed up three days later — Alice had already sold to Carol."
+        ),
+    )
+    col_a, col_b = st.columns([3, 2])
+    with col_a:
+        gen_btn = st.button("Generate IRAC", type="primary", use_container_width=True)
+    with col_b:
+        zoom_btn = st.button("Issue Map First", use_container_width=True, help="See all issues before full analysis")
 
-    with col_left:
-        # Area of Law is hidden behind a modal — picking a pill closes it instantly.
-        _area = st.session_state.get("area_gen_value") or "Contracts"
-        if st.button(f"⚖️ Area of Law: {_area}", key="btn_area_gen"):
-            C.pick_area_dialog("area_gen_value")
-        area_gen = _area
-        facts_gen = st.text_area(
-            "Facts", height=260, key="facts_gen",
-            placeholder=(
-                "Paste or type your fact pattern here...\n\n"
-                "e.g. Alice offered to sell her 2020 Honda Civic for $12,000. "
-                "Bob replied '$11,500.' Alice said 'Deal at $11,800.' "
-                "Bob showed up three days later — Alice had already sold to Carol."
-            ),
-        )
+    st.divider()
 
-        col_a, col_b = st.columns([3, 2])
-        with col_a:
-            gen_btn = st.button("Generate IRAC", type="primary", use_container_width=True)
-        with col_b:
-            zoom_btn = st.button("Issue Map First", use_container_width=True, help="See all issues before full analysis")
+    # ── Analysis (full width, single column) ──────────────────────────────────
+    st.markdown('<div class="section-label">Analysis</div>', unsafe_allow_html=True)
 
-    with col_right:
-        st.markdown('<div class="section-label">Analysis</div>', unsafe_allow_html=True)
-
-        if zoom_btn:
-            if not facts_gen.strip():
-                st.warning("Paste your facts first.")
-            else:
-                try:
-                    issue_map_text = C.stream_issue_map_with_progress(facts_gen, area_gen)
-                    st.markdown(
-                        f'<div class="irac-card irac-card-blue" style="animation:slideInRight 0.4s ease;">'
-                        f'{issue_map_text}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    st.info("Click **Generate IRAC** to analyze a specific issue in depth.")
-                except Exception as e:
-                    st.error(f"Issue map failed: {e}")
-
-        elif gen_btn:
-            if not facts_gen.strip():
-                st.warning("Paste your facts first.")
-            else:
-                try:
-                    result = C.stream_with_progress(facts_gen, area_gen)
-                    st.session_state.last_irac = result
-                    st.session_state.last_facts = facts_gen
-                    st.session_state.last_area = area_gen
-                    C.show_irreac(result)
-                    st.divider()
-                    pdf_bytes = export_to_pdf(result, facts_gen, area_gen)
-                    st.download_button(
-                        "Download as PDF", data=pdf_bytes,
-                        file_name="irac_analysis.pdf", mime="application/pdf",
-                        use_container_width=True,
-                    )
-                    st.success("Switch to **Compare & Feedback** to grade your own draft against this.")
-                except Exception as e:
-                    st.error(f"Generation failed: {e}")
+    if zoom_btn:
+        if not facts_gen.strip():
+            st.warning("Paste your facts first.")
         else:
-            st.markdown("""
+            try:
+                issue_map_text = C.stream_issue_map_with_progress(facts_gen, area_gen)
+                st.markdown(
+                    f'<div class="irac-card irac-card-blue" style="animation:slideInRight 0.4s ease;">'
+                    f'{issue_map_text}</div>',
+                    unsafe_allow_html=True,
+                )
+                st.info("Click **Generate IRAC** to analyze a specific issue in depth.")
+            except Exception as e:
+                st.error(f"Issue map failed: {e}")
+
+    elif gen_btn:
+        if not facts_gen.strip():
+            st.warning("Paste your facts first.")
+        else:
+            try:
+                result = C.stream_with_progress(facts_gen, area_gen)
+                st.session_state.last_irac = result
+                st.session_state.last_facts = facts_gen
+                st.session_state.last_area = area_gen
+                C.show_irreac(result)
+                st.divider()
+                pdf_bytes = export_to_pdf(result, facts_gen, area_gen)
+                st.download_button(
+                    "Download as PDF", data=pdf_bytes,
+                    file_name="irac_analysis.pdf", mime="application/pdf",
+                    use_container_width=True,
+                )
+                st.success("Switch to **Compare & Feedback** to grade your own draft against this.")
+            except Exception as e:
+                st.error(f"Generation failed: {e}")
+    else:
+        st.markdown("""
 <div class="irac-card" style="text-align:center;padding:3rem 2rem;border-style:dashed;">
     <div style="font-size:2rem;margin-bottom:1rem;">⚖️</div>
     <div style="font-family:Poppins,sans-serif;font-size:14px;color:#b0aea5;">
@@ -121,7 +119,7 @@ with tab_gen:
 </div>
 """, unsafe_allow_html=True)
 
-    # ── "How IRAC Works" — full-width, below both columns ─────────────────────
+    # ── "How IRAC Works" — full-width, below ──────────────────────────────────
     st.divider()
     st.markdown('<div class="section-label">How IRAC Works</div>', unsafe_allow_html=True)
     st.markdown("""
@@ -157,11 +155,9 @@ with tab_both:
     if st.button(f"⚖️ Area of Law: {_area_bs}", key="btn_area_bs"):
         C.pick_area_dialog("area_bs_value")
     area_bs = _area_bs
-    col_bs, col_empty = st.columns([1, 2])
-    with col_bs:
-        facts_bs = st.text_area("Facts", height=180, key="facts_bs",
-                                placeholder="Paste the fact pattern here...")
-        both_btn = st.button("Generate Both Sides", type="primary", use_container_width=True)
+    facts_bs = st.text_area("Facts", height=180, key="facts_bs",
+                            placeholder="Paste the fact pattern here...")
+    both_btn = st.button("Generate Both Sides", type="primary", use_container_width=True)
 
     if both_btn:
         if not facts_bs.strip():
@@ -184,13 +180,12 @@ with tab_both:
                 st.session_state.last_facts = facts_bs
                 st.session_state.last_area = area_bs
                 st.divider()
-                col_p, col_d = st.columns(2, gap="large")
-                with col_p:
-                    st.markdown('<div class="section-label" style="color:#d97757;">Plaintiff\'s Best Argument</div>', unsafe_allow_html=True)
-                    C.show_irreac(p_result)
-                with col_d:
-                    st.markdown('<div class="section-label" style="color:#6a9bcc;">Defendant\'s Best Argument</div>', unsafe_allow_html=True)
-                    C.show_irreac(d_result)
+                # Stacked vertical layout — plaintiff first, then defendant.
+                st.markdown('<div class="section-label" style="color:#d97757;">Plaintiff\'s Best Argument</div>', unsafe_allow_html=True)
+                C.show_irreac(p_result)
+                st.divider()
+                st.markdown('<div class="section-label" style="color:#6a9bcc;">Defendant\'s Best Argument</div>', unsafe_allow_html=True)
+                C.show_irreac(d_result)
             except Exception as e:
                 st.error(f"Generation failed: {e}")
 
@@ -571,10 +566,10 @@ with tab_soc:
 # TAB 5 — ABOUT
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_about:
-    # ── Modes ──────────────────────────────────────────────────────────────────
+    # ── Modes (single-column stack) ────────────────────────────────────────────
     st.markdown('<div class="section-label">Modes</div>', unsafe_allow_html=True)
     st.markdown("""
-<div style="display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:1.5rem;">
+<div style="display:flex; flex-direction:column; gap:10px; margin-bottom:1.5rem;">
     <div class="irac-card" style="padding:16px 18px;">
         <div class="section-label">Generate IRAC</div>
         <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
@@ -602,18 +597,15 @@ with tab_about:
 </div>
 """, unsafe_allow_html=True)
 
-    # ── Writing Tips ───────────────────────────────────────────────────────────
+    # ── Writing Tips (single-column stack, in I-R-A-C order) ───────────────────
     st.markdown('<div class="section-label" style="margin-top:1rem;">Writing Tips</div>', unsafe_allow_html=True)
     st.caption("Quick reminders for each section of the IRAC, used when grading your draft in Compare & Feedback.")
 
-    col_t1, col_t2 = st.columns(2)
-    with col_t1:
-        st.markdown("**I — Issue**")
-        C.section_tip("issue")
-        st.markdown("**A — Application**")
-        C.section_tip("application")
-    with col_t2:
-        st.markdown("**R — Rule**")
-        C.section_tip("rule")
-        st.markdown("**C — Conclusion**")
-        C.section_tip("conclusion")
+    st.markdown("**I — Issue**")
+    C.section_tip("issue")
+    st.markdown("**R — Rule**")
+    C.section_tip("rule")
+    st.markdown("**A — Application**")
+    C.section_tip("application")
+    st.markdown("**C — Conclusion**")
+    C.section_tip("conclusion")
