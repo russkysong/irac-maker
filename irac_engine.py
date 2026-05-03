@@ -326,12 +326,19 @@ def compare_irac(
     student_conclusion: str,
     model_irac: IRRACOutput,
 ) -> IRACFeedback:
+    # If the reference doesn't separate Rule Statement from Rule Exploration
+    # (e.g. a user-pasted IRAC), pass a placeholder for R2 so the grader
+    # doesn't penalize the student for missing case-law commentary that
+    # isn't in the reference either.
+    rule_exploration = model_irac.rule_exploration.strip()
+    if not rule_exploration:
+        rule_exploration = "(not provided in reference — do not penalize student for missing this)"
     prompt = FEEDBACK_PROMPT.format(
         area=area,
         facts=facts.strip(),
         model_issue=model_irac.issue,
         model_rule_statement=model_irac.rule_statement,
-        model_rule_exploration=model_irac.rule_exploration,
+        model_rule_exploration=rule_exploration,
         model_application=model_irac.application,
         model_conclusion=model_irac.conclusion,
         student_issue=student_issue.strip() or "(not provided)",

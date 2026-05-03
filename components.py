@@ -115,17 +115,23 @@ def insight_box(text: str):
 
 
 def show_irreac(result: IRRACOutput, expanded: bool = True):
-    """Renders a full IRREAC result in styled expanders."""
-    sections = [
-        ("I — Issue", result.issue, "irac-card-accent"),
-        ("R1 — Rule Statement", result.rule_statement, "irac-card-blue"),
-        ("R2 — Rule Exploration", result.rule_exploration, "irac-card-blue"),
-        ("A — Application", result.application, "irac-card-accent"),
-        ("C — Conclusion", result.conclusion, "irac-card-green"),
-    ]
+    """Renders a full IRREAC result in styled expanders.
+
+    When `rule_exploration` is empty (e.g., a user-pasted reference IRAC that
+    doesn't split R1/R2), R1 and R2 are collapsed into a single "R — Rule".
+    """
+    sections = [("I — Issue", result.issue, "irac-card-accent")]
+    if result.rule_exploration.strip():
+        sections.append(("R1 — Rule Statement", result.rule_statement, "irac-card-blue"))
+        sections.append(("R2 — Rule Exploration", result.rule_exploration, "irac-card-blue"))
+    else:
+        sections.append(("R — Rule", result.rule_statement, "irac-card-blue"))
+    sections.append(("A — Application", result.application, "irac-card-accent"))
+    sections.append(("C — Conclusion", result.conclusion, "irac-card-green"))
+
     for label, content, _ in sections:
         with st.expander(f"**{label}**", expanded=expanded):
-            st.markdown(content)
+            st.markdown(content or "*Not provided*")
 
     if result.tips:
         st.markdown("""
