@@ -75,6 +75,29 @@ def save_brief(case_text: str, result_dict: dict) -> dict:
     return entry
 
 
+def save_essay(facts: str, area: str, essay: str, result_dict: dict) -> dict:
+    """Persist a Long-form Essay grading. Returns the saved entry metadata.
+
+    Title combines the overall grade with the first line of facts so the
+    History list shows at-a-glance which essay it was.
+    """
+    _ensure_dir()
+    grade = result_dict.get("overall_grade", "—")
+    first_line = _truncate((facts.strip().split("\n", 1)[0] or "(untitled essay)"), 60)
+    entry = {
+        "id": _new_id(),
+        "type": "essay",
+        "title": _truncate(f"Essay {grade} — {first_line}", 90),
+        "area": area,
+        "facts": facts.strip(),
+        "essay": essay.strip(),
+        "result": result_dict,
+        "saved_at": _now(),
+    }
+    _entry_path(entry["id"]).write_text(json.dumps(entry, indent=2))
+    return entry
+
+
 def save_spot(facts: str, area: str, student_issues: str, result_dict: dict) -> dict:
     """Persist an Issue Spotting drill. Returns the saved entry metadata.
 

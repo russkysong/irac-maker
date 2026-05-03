@@ -7,7 +7,7 @@ import components as C
 import outlines
 import history
 from irac_engine import (
-    compare_irac, grade_issue_spot,
+    compare_irac, grade_issue_spot, grade_essay, generate_mbe_question,
     socratic_next_question, check_model_ready, AREAS_OF_LAW,
 )
 from export import export_to_pdf
@@ -37,15 +37,20 @@ DEFAULTS = {
     "last_irac": None, "last_facts": "", "last_area": "Contracts",
     "socratic_history": [], "socratic_facts": "", "socratic_area": "Contracts",
     "socratic_started": False,
+    # MBE Practice state
+    "mbe_question": None, "mbe_user_answer": None, "mbe_submitted": False,
+    "mbe_correct_count": 0, "mbe_total_count": 0,
 }
 for k, v in DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_gen, tab_brief, tab_both, tab_spot, tab_cmp, tab_soc, tab_outlines, tab_history, tab_about = st.tabs([
-    "Generate IRAC", "Case Brief", "Both Sides", "Issue Spotting",
-    "Compare & Feedback", "Socratic Mode", "My Outlines", "History", "About",
+(tab_gen, tab_brief, tab_both, tab_spot, tab_mbe,
+ tab_cmp, tab_essay, tab_soc, tab_outlines, tab_history, tab_about) = st.tabs([
+    "Generate IRAC", "Case Brief", "Both Sides", "Issue Spotting", "MBE Practice",
+    "Compare & Feedback", "Long Essay", "Socratic Mode",
+    "My Outlines", "History", "About",
 ])
 
 
@@ -343,7 +348,131 @@ with tab_spot:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 5 — COMPARE & FEEDBACK
+# TAB 5 — MBE PRACTICE
+# ════════════════════════════════════════════════════════════════════════════════
+with tab_mbe:
+    st.markdown("""
+<div class="irac-card irac-card-blue" style="margin-bottom:1.5rem;">
+    <div class="section-label" style="color:#6a9bcc;">MBE Practice</div>
+    <p style="margin:0;font-size:14px;color:#b0aea5;">
+        Generate one MBE-style multiple choice question on demand. Pick an
+        answer, get a full explanation for every choice, and see your
+        running score this session.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    # ── Settings row + score badge ────────────────────────────────────────────
+    col_area, col_diff, col_score = st.columns([2, 2, 1])
+    with col_area:
+        _area_mbe = st.session_state.get("area_mbe_value") or st.session_state.get("last_area") or "Contracts"
+        if st.button(f"⚖️ Area of Law: {_area_mbe}", key="btn_area_mbe"):
+            C.pick_area_dialog("area_mbe_value")
+        area_mbe = _area_mbe
+    with col_diff:
+        difficulty_mbe = st.pills(
+            "Difficulty", ["Easy", "Medium", "Hard"],
+            default=st.session_state.get("mbe_difficulty", "Medium"),
+            key="mbe_difficulty",
+            label_visibility="collapsed",
+        ) or "Medium"
+    with col_score:
+        total = st.session_state.get("mbe_total_count", 0)
+        correct = st.session_state.get("mbe_correct_count", 0)
+        score_color = "#788c5d" if total and correct/total >= 0.7 else (
+            "#d97757" if total and correct/total >= 0.5 else "#b0aea5")
+        st.markdown(
+            f'<div style="text-align:right;padding:6px 0;">'
+            f'<div style="font-family:Poppins,sans-serif;font-size:10px;font-weight:700;'
+            f'letter-spacing:0.12em;text-transform:uppercase;color:#b0aea5;">Score</div>'
+            f'<div style="font-family:Poppins,sans-serif;font-size:22px;font-weight:700;'
+            f'color:{score_color};">{correct}/{total}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Action buttons ─────────────────────────────────────────────────────────
+    col_new, col_reset = st.columns([3, 1])
+    with col_new:
+        new_q_btn = st.button(
+            "Generate new question" if st.session_state.get("mbe_question") else "Generate first question",
+            type="primary", use_container_width=True, key="mbe_new_btn",
+        )
+    with col_reset:
+        if st.button("Reset score", use_container_width=True, key="mbe_reset_btn"):
+            st.session_state.mbe_correct_count = 0
+            st.session_state.mbe_total_count = 0
+            st.session_state.mbe_question = None
+            st.session_state.mbe_user_answer = None
+            st.session_state.mbe_submitted = False
+            st.rerun()
+
+    if new_q_btn:
+        try:
+            q = C.run_with_time_progress(
+                generate_mbe_question,
+                phase="Drafting an MBE question",
+                est_seconds=30,
+                sublabels=[
+                    (0,  "Picking a doctrine to test..."),
+                    (35, "Writing a fact pattern..."),
+                    (65, "Crafting four plausible choices..."),
+                    (88, "Writing per-choice explanations..."),
+                ],
+                area=area_mbe, difficulty=difficulty_mbe,
+            )
+            st.session_state.mbe_question = q.model_dump()
+            st.session_state.mbe_user_answer = None
+            st.session_state.mbe_submitted = False
+            st.rerun()
+        except Exception as e:
+            st.error(f"Question generation failed: {e}")
+
+    # ── Display current question ───────────────────────────────────────────────
+    q_dict = st.session_state.get("mbe_question")
+    if q_dict:
+        from models import MBEQuestion as _MBEQuestion
+        question = _MBEQuestion(**q_dict)
+        st.divider()
+        C.show_mbe_question_card(question)
+
+        if not st.session_state.get("mbe_submitted"):
+            # Pre-submit: radio + Submit
+            choice_letters = [c.letter for c in question.choices]
+            choice_labels = {c.letter: f"**{c.letter}.** {c.text}" for c in question.choices}
+            picked = st.radio(
+                "Your answer",
+                choice_letters,
+                format_func=lambda l: choice_labels.get(l, l),
+                key="mbe_user_answer",
+                label_visibility="collapsed",
+                index=None,
+            )
+            submit = st.button(
+                "Submit answer",
+                type="primary",
+                use_container_width=True,
+                disabled=picked is None,
+                key="mbe_submit_btn",
+            )
+            if submit:
+                st.session_state.mbe_submitted = True
+                st.session_state.mbe_total_count = (
+                    st.session_state.get("mbe_total_count", 0) + 1
+                )
+                if (picked or "").strip().upper() == question.correct_letter.strip().upper():
+                    st.session_state.mbe_correct_count = (
+                        st.session_state.get("mbe_correct_count", 0) + 1
+                    )
+                st.rerun()
+        else:
+            # Post-submit: full explanations + Next button
+            user_answer = st.session_state.get("mbe_user_answer") or ""
+            C.show_mbe_result(question, user_answer)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# TAB 6 — COMPARE & FEEDBACK
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_cmp:
     st.markdown("""
@@ -586,7 +715,81 @@ with tab_cmp:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 6 — SOCRATIC MODE
+# TAB 7 — LONG ESSAY
+# ════════════════════════════════════════════════════════════════════════════════
+with tab_essay:
+    st.markdown("""
+<div class="irac-card irac-card-green" style="margin-bottom:1.5rem;">
+    <div class="section-label" style="color:#788c5d;">Long Essay Grader</div>
+    <p style="margin:0;font-size:14px;color:#b0aea5;">
+        For multi-issue, bar-exam-style essays. Paste the facts and your full
+        essay — the AI identifies every real issue, locates how you addressed
+        each one, scores each separately, and gives an overall grade with
+        coverage notes.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    _area_essay = st.session_state.get("area_essay_value") or st.session_state.get("last_area") or "Contracts"
+    if st.button(f"⚖️ Area of Law: {_area_essay}", key="btn_area_essay"):
+        C.pick_area_dialog("area_essay_value")
+    area_essay = _area_essay
+
+    facts_essay = st.text_area(
+        "Facts",
+        height=180,
+        key="facts_essay",
+        placeholder="Paste the multi-issue fact pattern here...",
+    )
+    essay_text = st.text_area(
+        "Your essay",
+        height=380,
+        key="essay_text",
+        placeholder=(
+            "Paste your full essay. Address each issue you spot with full IRAC "
+            "(Issue, Rule, Application, Conclusion). Section labels help but aren't required."
+        ),
+    )
+
+    essay_btn = st.button(
+        "Grade my essay", type="primary", use_container_width=True, key="essay_btn",
+    )
+
+    if essay_btn:
+        if not facts_essay.strip():
+            st.warning("Paste facts first.")
+        elif not essay_text.strip():
+            st.warning("Paste your essay before grading.")
+        elif len(essay_text.strip()) < 200:
+            st.warning("This looks too short for a multi-issue essay. Use **Compare & Feedback** for short single-issue drafts.")
+        else:
+            try:
+                feedback = C.run_with_time_progress(
+                    grade_essay,
+                    phase="Grading your essay",
+                    est_seconds=120,
+                    sublabels=[
+                        (0,  "Reading the facts..."),
+                        (15, "Identifying every real issue..."),
+                        (40, "Locating how you addressed each issue..."),
+                        (65, "Scoring issue by issue..."),
+                        (85, "Aggregating to overall grade and coverage..."),
+                        (95, "Writing key insight..."),
+                    ],
+                    facts=facts_essay, area=area_essay, essay=essay_text,
+                )
+                try:
+                    history.save_essay(facts_essay, area_essay, essay_text, feedback.model_dump())
+                except Exception:
+                    pass
+                st.divider()
+                C.show_essay_feedback(feedback)
+            except Exception as e:
+                st.error(f"Grading failed: {e}")
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# TAB 8 — SOCRATIC MODE
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_soc:
     st.markdown("""
@@ -715,7 +918,7 @@ with tab_soc:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 7 — MY OUTLINES
+# TAB 9 — MY OUTLINES
 # ════════════════════════════════════════════════════════════════════════════════
 def _humanize_age(iso_ts: str) -> str:
     """Render '2 days ago' / 'just now' from an ISO timestamp."""
@@ -836,12 +1039,13 @@ with tab_outlines:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 8 — HISTORY
+# TAB 10 — HISTORY
 # ════════════════════════════════════════════════════════════════════════════════
 from models import (
     IRRACOutput as _IRRACOutput,
     CaseBrief as _CaseBrief,
     IssueSpottingResult as _IssueSpottingResult,
+    EssayFeedback as _EssayFeedback,
 )
 
 with tab_history:
@@ -866,10 +1070,13 @@ with tab_history:
     with col_t:
         history_type = st.pills(
             "Type",
-            ["all", "irac", "brief", "spot"],
+            ["all", "irac", "brief", "spot", "essay"],
             default="all",
             key="history_type",
-            format_func=lambda x: {"all": "All", "irac": "IRACs", "brief": "Briefs", "spot": "Spot Drills"}[x],
+            format_func=lambda x: {
+                "all": "All", "irac": "IRACs", "brief": "Briefs",
+                "spot": "Spot Drills", "essay": "Long Essays",
+            }[x],
             label_visibility="collapsed",
         ) or "all"
     with col_clear:
@@ -901,11 +1108,13 @@ with tab_history:
                 "irac":  "#d97757",
                 "brief": "#6a9bcc",
                 "spot":  "#788c5d",
+                "essay": "#788c5d",
             }.get(entry_type_v, "#b0aea5")
             type_label = {
                 "irac":  "IRAC",
                 "brief": "Brief",
                 "spot":  "Spot Drill",
+                "essay": "Long Essay",
             }.get(entry_type_v, entry_type_v.upper())
             area = entry.get("area")
             saved_iso = entry.get("saved_at", "")
@@ -956,6 +1165,14 @@ with tab_history:
                             with st.expander("Your spotted issues", expanded=False):
                                 st.markdown(html.escape(entry["student_issues"]))
                         C.show_issue_spotting(_IssueSpottingResult(**result))
+                    elif entry_type_v == "essay":
+                        if entry.get("facts"):
+                            with st.expander("Original facts", expanded=False):
+                                st.markdown(html.escape(entry["facts"]))
+                        if entry.get("essay"):
+                            with st.expander("Your essay", expanded=False):
+                                st.markdown(html.escape(entry["essay"]))
+                        C.show_essay_feedback(_EssayFeedback(**result))
                     else:  # brief
                         if entry.get("case_text"):
                             with st.expander("Original case text", expanded=False):
@@ -985,7 +1202,7 @@ with tab_history:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 9 — ABOUT
+# TAB 11 — ABOUT
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_about:
     # ── Modes (single-column stack) ────────────────────────────────────────────
@@ -1016,10 +1233,22 @@ with tab_about:
             Drill-style: paste a hypo, list every issue you can spot, get scored on coverage. Faster feedback than writing a full IRAC.
         </div>
     </div>
+    <div class="irac-card irac-card-blue" style="padding:16px 18px;">
+        <div class="section-label" style="color:#6a9bcc;">MBE Practice</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Generates one MBE-style multiple-choice question on demand with full per-choice explanations. Tracks running score this session.
+        </div>
+    </div>
     <div class="irac-card irac-card-green" style="padding:16px 18px;">
         <div class="section-label" style="color:#788c5d;">Compare & Feedback</div>
         <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
             Write your own IRAC first, then get it graded section-by-section against the AI's model answer.
+        </div>
+    </div>
+    <div class="irac-card irac-card-green" style="padding:16px 18px;">
+        <div class="section-label" style="color:#788c5d;">Long Essay</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Bar-exam-style: paste a multi-issue fact pattern and your full essay. AI identifies every real issue, locates how you addressed each, scores them separately, and gives an overall grade with coverage notes.
         </div>
     </div>
     <div class="irac-card" style="padding:16px 18px;border-left:3px solid #b0aea5;">

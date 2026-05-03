@@ -1,6 +1,9 @@
 import json
 import ollama
-from models import IRRACOutput, DualIRAC, IRACFeedback, CaseBrief, IssueSpottingResult
+from models import (
+    IRRACOutput, DualIRAC, IRACFeedback, CaseBrief,
+    IssueSpottingResult, EssayFeedback, MBEQuestion,
+)
 
 MODEL_NAME = "irac-maker"
 
@@ -266,6 +269,90 @@ Student's spotted issues (one per line):
 Grade the coverage. Respond ONLY with valid JSON."""
 
 
+ESSAY_SYSTEM = """You are a tough but fair American law school professor grading a student's
+multi-issue essay answer. Bar-exam-style essays raise multiple legal issues and the student
+must address each one with full IRAC (Issue, Rule, Application, Conclusion).
+
+Grading procedure:
+1. First, internally identify EVERY real issue the facts raise.
+2. For each real issue, locate what the student wrote (quote/paraphrase briefly).
+   If they didn't address it at all, mark "Missing".
+3. Score each issue: Excellent / Good / Needs Work / Missing.
+4. Aggregate to a realistic letter grade (most students get B/B+; A is exceptional).
+5. Coverage matters — addressing 4 of 6 issues poorly beats addressing 2 of 6 well.
+6. Application carries the most weight inside each issue.
+
+Output ONLY valid JSON:
+{
+  "issues": [
+    {
+      "issue_name": "<short name>",
+      "student_treatment": "<1-2 sentence summary of what the student wrote, or 'Not addressed'>",
+      "score": "Excellent | Good | Needs Work | Missing",
+      "strengths": "<what they did well, or empty if Missing>",
+      "gaps": "<what was missing or wrong>"
+    }
+  ],
+  "coverage_note": "Addressed X of Y issues",
+  "overall_grade": "A | A- | B+ | B | B- | C+ | C | C- | D | F",
+  "overall_feedback": "<2-3 sentence holistic note>",
+  "key_insight": "<single most important fix>"
+}"""
+
+
+ESSAY_PROMPT = """Area of Law: {area}
+
+Facts:
+{facts}
+
+Student's essay (multi-issue):
+{essay}
+
+Grade the essay. Respond ONLY with valid JSON."""
+
+
+MBE_SYSTEM = """You are a bar exam question writer creating ONE original MBE-style multiple choice question.
+
+Style guide (mimic the actual MBE):
+- Facts: a tight 75-150 word fact pattern. No fluff.
+- Call of question: precise — "Who is most likely to prevail?", "Which of the following is the strongest argument...", etc.
+- Four choices labeled A, B, C, D. Single best answer.
+- Distractors must be plausible — common student mistakes, partially correct, or wrong rule application. Never absurd.
+- Test core doctrine in the area, not trivia.
+- The correct answer reflects the majority/MBE-tested rule unless the call says otherwise.
+
+For EACH choice (correct AND incorrect), explain WHY in 1-2 sentences. The explanations are the
+teaching moment — be specific.
+
+Output ONLY valid JSON:
+{
+  "facts": "...",
+  "call_of_question": "...",
+  "choices": [
+    {"letter": "A", "text": "..."},
+    {"letter": "B", "text": "..."},
+    {"letter": "C", "text": "..."},
+    {"letter": "D", "text": "..."}
+  ],
+  "correct_letter": "A | B | C | D",
+  "explanations": {
+    "A": "Why A is right or wrong",
+    "B": "...",
+    "C": "...",
+    "D": "..."
+  },
+  "area": "<the area provided>"
+}"""
+
+
+MBE_PROMPT = """Generate one MBE-style question.
+
+Area of Law: {area}
+Difficulty: {difficulty}
+
+Output ONLY valid JSON."""
+
+
 # ── functions ──────────────────────────────────────────────────────────────────
 
 def _chat(system: str | None, user: str, use_json: bool = True) -> dict:
@@ -502,6 +589,46 @@ def compare_irac(
         )
     resp = _chat(FEEDBACK_SYSTEM, prompt, use_json=True)
     return IRACFeedback(**json.loads(resp["message"]["content"]))
+
+
+def generate_mbe_question(area: str = "Contracts", difficulty: str = "Medium") -> MBEQuestion:
+    """Generate one fresh MBE-style question. Output budget is generous because
+    the JSON has 4 choices + 4 explanations.
+    """
+    prompt = MBE_PROMPT.format(area=area, difficulty=difficulty)
+    resp = ollama.chat(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": MBE_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+        format="json",
+        options={"num_predict": 2000},
+        keep_alive=_KEEP_ALIVE,
+        think=False,
+    )
+    return MBEQuestion(**json.loads(resp["message"]["content"]))
+
+
+def grade_essay(facts: str, area: str, essay: str) -> EssayFeedback:
+    """Grade a multi-issue essay. Bigger token budget than IRAC since output
+    has one feedback block per issue plus aggregates.
+    """
+    prompt = ESSAY_PROMPT.format(
+        area=area, facts=facts.strip(), essay=essay.strip() or "(empty)",
+    )
+    resp = ollama.chat(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": ESSAY_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+        format="json",
+        options={"num_predict": 2400},  # multi-issue output runs longer
+        keep_alive=_KEEP_ALIVE,
+        think=False,
+    )
+    return EssayFeedback(**json.loads(resp["message"]["content"]))
 
 
 def grade_issue_spot(facts: str, area: str, student_issues: str) -> IssueSpottingResult:

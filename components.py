@@ -172,6 +172,152 @@ def show_irreac(result: IRRACOutput, expanded: bool = True):
             )
 
 
+# ── MBE renderers ─────────────────────────────────────────────────────────────
+
+def show_mbe_question_card(question):
+    """Renders the fact pattern + call-of-question (without revealing the answer)."""
+    st.markdown(
+        f'<div class="irac-card irac-card-blue" style="padding:18px 22px;margin-bottom:1rem;">'
+        f'<div class="section-label" style="color:#6a9bcc;">Fact Pattern</div>'
+        f'<div style="font-family:Lora,serif;font-size:15px;line-height:1.7;color:#e8e6dc;">'
+        f'{question.facts}'
+        f'</div>'
+        f'<div style="margin-top:16px;font-family:Poppins,sans-serif;font-size:14px;'
+        f'font-weight:600;color:#faf9f5;border-top:1px solid #2a2925;padding-top:14px;">'
+        f'{question.call_of_question}'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def show_mbe_result(question, user_answer: str):
+    """After-submit view: highlights correct + user's pick, shows all 4 explanations."""
+    correct = question.correct_letter.strip().upper()
+    user = (user_answer or "").strip().upper()
+    is_correct = (user == correct)
+
+    badge_color = "#788c5d" if is_correct else "#ef4444"
+    badge_label = "✓ Correct" if is_correct else "✗ Incorrect"
+
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:14px;margin-bottom:1rem;">'
+        f'<div style="background:{badge_color}22;border:1px solid {badge_color}55;'
+        f'color:{badge_color};font-family:Poppins,sans-serif;font-size:13px;font-weight:700;'
+        f'letter-spacing:0.06em;text-transform:uppercase;padding:6px 14px;border-radius:999px;">'
+        f'{badge_label}'
+        f'</div>'
+        f'<div style="font-family:Poppins,sans-serif;font-size:14px;color:#b0aea5;">'
+        f'You picked <strong style="color:#faf9f5;">{user or "—"}</strong>. '
+        f'Correct answer: <strong style="color:#788c5d;">{correct}</strong>.'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    for choice in question.choices:
+        letter = choice.letter.strip().upper()
+        is_right = (letter == correct)
+        is_user = (letter == user)
+
+        # Border color: green for correct answer, red for user's wrong pick, gray otherwise.
+        if is_right:
+            border_color = "#788c5d"
+        elif is_user and not is_correct:
+            border_color = "#ef4444"
+        else:
+            border_color = "#2a2925"
+
+        # Marker emoji to make scanning fast.
+        if is_right:
+            marker = "✓"
+        elif is_user and not is_correct:
+            marker = "✗"
+        else:
+            marker = "·"
+
+        explanation = question.explanations.get(letter, "")
+        st.markdown(
+            f'<div class="irac-card" style="padding:12px 16px;margin-bottom:8px;'
+            f'border:1px solid {border_color};border-left:3px solid {border_color};">'
+            f'<div style="font-family:Poppins,sans-serif;font-size:14px;font-weight:600;'
+            f'color:#faf9f5;margin-bottom:6px;">'
+            f'<span style="color:{border_color};margin-right:8px;">{marker}</span>'
+            f'<strong>{letter}.</strong> {choice.text}'
+            f'</div>'
+            f'<div style="font-family:Lora,serif;font-size:13px;color:#b0aea5;line-height:1.6;'
+            f'padding-left:24px;">'
+            f'{explanation or "—"}'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+
+# ── Long-form Essay renderer ──────────────────────────────────────────────────
+
+def show_essay_feedback(feedback):
+    """Renders an EssayFeedback: grade badge, coverage, per-issue breakdown."""
+    if feedback.overall_grade:
+        grade_badge(feedback.overall_grade)
+
+    if feedback.coverage_note:
+        st.markdown(
+            f'<div class="irac-card irac-card-blue" style="padding:12px 16px;margin-bottom:12px;'
+            f'font-family:Poppins,sans-serif;font-size:13px;color:#faf9f5;">'
+            f'<span style="color:#6a9bcc;font-weight:700;text-transform:uppercase;'
+            f'letter-spacing:0.1em;font-size:11px;margin-right:8px;">Coverage</span>'
+            f'{feedback.coverage_note}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    if feedback.overall_feedback:
+        st.markdown(
+            f'<div class="irac-card" style="font-family:Lora,serif;font-style:italic;'
+            f'color:#e8e6dc;margin-bottom:1rem;">"{feedback.overall_feedback}"</div>',
+            unsafe_allow_html=True,
+        )
+
+    if feedback.key_insight:
+        insight_box(feedback.key_insight)
+
+    if feedback.issues:
+        st.markdown(
+            '<div class="section-label" style="margin-top:1rem;">Issue-by-Issue Breakdown</div>',
+            unsafe_allow_html=True,
+        )
+        for it in feedback.issues:
+            pill_html = score_pill(it.score)
+            with st.expander(f"**{it.issue_name or '(unnamed issue)'}**", expanded=True):
+                st.markdown(
+                    f'<div style="margin-bottom:12px;">{pill_html}</div>',
+                    unsafe_allow_html=True,
+                )
+                if it.student_treatment:
+                    st.markdown(
+                        f'<div style="font-family:Lora,serif;font-size:13px;'
+                        f'color:#b0aea5;font-style:italic;margin-bottom:10px;">'
+                        f'Your treatment: {it.student_treatment}</div>',
+                        unsafe_allow_html=True,
+                    )
+                col_got, col_gap = st.columns(2)
+                with col_got:
+                    st.markdown('<div class="feedback-col-header">What you got right</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div style="font-family:Lora,serif;font-size:14px;color:#e8e6dc;">'
+                        f'{it.strengths or "—"}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with col_gap:
+                    st.markdown('<div class="feedback-col-header">What to improve</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div style="font-family:Lora,serif;font-size:14px;color:#e8e6dc;">'
+                        f'{it.gaps or "—"}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+
 # ── Issue Spotting renderer ───────────────────────────────────────────────────
 
 def show_issue_spotting(result):

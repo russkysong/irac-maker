@@ -72,6 +72,49 @@ class IssueSpottingResult(BaseModel):
     )
 
 
+class EssayIssueFeedback(BaseModel):
+    """Per-issue grade inside a multi-issue essay."""
+    issue_name: str = Field(default="", description="Short name for the issue")
+    student_treatment: str = Field(
+        default="",
+        description="1-2 sentence summary of what the student wrote about this issue (or 'Not addressed')",
+    )
+    score: str = Field(default="Missing", description="Excellent | Good | Needs Work | Missing")
+    strengths: str = Field(default="", description="What the student did well on this issue")
+    gaps: str = Field(default="", description="What was missing or wrong")
+
+
+class EssayFeedback(BaseModel):
+    """Result of grading a multi-issue (bar-exam-style) essay."""
+    issues: List[EssayIssueFeedback] = Field(default_factory=list)
+    coverage_note: str = Field(
+        default="",
+        description="Sentence about how many real issues were addressed, e.g. 'Addressed 4 of 6 issues'",
+    )
+    overall_grade: str = Field(default="", description="Letter grade")
+    overall_feedback: str = Field(default="", description="2-3 sentence holistic note")
+    key_insight: str = Field(default="", description="The single most important fix")
+
+
+class MBEChoice(BaseModel):
+    """One of the four answer choices on an MBE-style question."""
+    letter: str = Field(default="", description="A, B, C, or D")
+    text: str = Field(default="", description="The choice text")
+
+
+class MBEQuestion(BaseModel):
+    """An MBE-style multiple-choice question with explanations for every choice."""
+    facts: str = Field(default="", description="Fact pattern (75-150 words)")
+    call_of_question: str = Field(default="", description="The 'call' — what the question asks")
+    choices: List[MBEChoice] = Field(default_factory=list)
+    correct_letter: str = Field(default="", description="A | B | C | D")
+    explanations: dict = Field(
+        default_factory=dict,
+        description='Per-choice explanation, keyed by letter: {"A": "...", "B": "..."}',
+    )
+    area: str = Field(default="", description="Area of law")
+
+
 class CaseBrief(BaseModel):
     """Structured case brief for law school study.
 
