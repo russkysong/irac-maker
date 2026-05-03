@@ -468,6 +468,13 @@ def stream_zoom_out(facts: str, area: str):
 
 # ── Case Brief ────────────────────────────────────────────────────────────────
 
+# Case briefs are longer than IRACs (8 fields, all narrative). Bump the token
+# cap so the JSON close-brace isn't truncated mid-reasoning. With 1536, the
+# model would frequently drop the last 1-3 fields; 2400 leaves comfortable
+# headroom even for opinion-dense Supreme Court cases.
+_BRIEF_OLLAMA_OPTIONS = {"num_predict": 2400}
+
+
 # Section markers detected in the streaming JSON for live progress updates.
 _BRIEF_SECTION_LABELS = {
     '"case_name"':          ("Case Name",          "Identifying the case..."),
@@ -491,7 +498,7 @@ def generate_case_brief(text: str) -> CaseBrief:
             {"role": "user", "content": prompt},
         ],
         format="json",
-        options=_OLLAMA_OPTIONS,
+        options=_BRIEF_OLLAMA_OPTIONS,
         keep_alive=_KEEP_ALIVE,
         think=False,
     )
@@ -515,7 +522,7 @@ def stream_case_brief(text: str):
             {"role": "user", "content": prompt},
         ],
         stream=True,
-        options=_OLLAMA_OPTIONS,
+        options=_BRIEF_OLLAMA_OPTIONS,
         keep_alive=_KEEP_ALIVE,
         think=False,
     )

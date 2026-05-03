@@ -38,12 +38,18 @@ class IRACFeedback(BaseModel):
 
 
 class CaseBrief(BaseModel):
-    """Structured case brief for law school study."""
-    case_name: str = Field(description="Full citation: Plaintiff v. Defendant, Cite (Year)")
-    facts: str = Field(description="Plain-English facts of the dispute")
-    procedural_posture: str = Field(description="Procedural history through the courts")
-    issue: str = Field(description="Legal question framed as Whether ... given ...")
-    holding: str = Field(description="Direct answer with the court's ruling")
-    reasoning: str = Field(description="Court's analysis and rationale, including the rule applied")
-    dissent: str = Field(description="Summary of dissent if any, else empty string")
-    notes: List[str] = Field(description="Exam-relevant takeaways and significance")
+    """Structured case brief for law school study.
+
+    All fields default to empty so a model that omits a section still parses
+    successfully — the renderer falls back to "Not provided" / hides empty
+    sections. Strict validation here would convert a 95%-good response into
+    a hard failure, which is worse UX than rendering what we got.
+    """
+    case_name: str = Field(default="", description="Full citation: Plaintiff v. Defendant, Cite (Year)")
+    facts: str = Field(default="", description="Plain-English facts of the dispute")
+    procedural_posture: str = Field(default="", description="Procedural history through the courts")
+    issue: str = Field(default="", description="Legal question framed as Whether ... given ...")
+    holding: str = Field(default="", description="Direct answer with the court's ruling")
+    reasoning: str = Field(default="", description="Court's analysis and rationale, including the rule applied")
+    dissent: str = Field(default="", description="Summary of dissent if any, else empty string")
+    notes: List[str] = Field(default_factory=list, description="Exam-relevant takeaways and significance")
