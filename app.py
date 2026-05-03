@@ -107,8 +107,8 @@ with tab_gen:
             timer_min = st.slider("Minutes", 30, 180, 90, 5)
             C.render_timer(timer_min)
 
-        with st.expander("How IRAC works"):
-            st.markdown("""
+        st.markdown('<div class="section-label" style="margin-top:1rem;">How IRAC Works</div>', unsafe_allow_html=True)
+        st.markdown("""
 **IRAC** is the standard legal reasoning framework used in American law schools and on the bar exam.
 
 | Step | What it covers |

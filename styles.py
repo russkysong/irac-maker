@@ -9,6 +9,15 @@ def inject():
 /* ── Base ──────────────────────────────────────────────────────── */
 .stApp { background-color: #141413; }
 
+/* Kill Streamlit's default top padding so the header sits near the top */
+.stMainBlockContainer,
+[data-testid="stMainBlockContainer"],
+.block-container,
+[data-testid="block-container"] {
+    padding-top: 1rem !important;
+    padding-bottom: 2rem !important;
+}
+
 h1, h2, h3, h4, h5 {
     font-family: 'Poppins', sans-serif !important;
     color: #faf9f5 !important;
@@ -28,9 +37,9 @@ footer { display: none; }
 
 /* ── App header ───────────────────────────────────────────────── */
 .irac-header {
-    padding: 2rem 0 1.5rem 0;
+    padding: 0.25rem 0 1rem 0;
     border-bottom: 1px solid #2a2925;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
     animation: fadeIn 0.5s ease;
 }
 .irac-logo {
