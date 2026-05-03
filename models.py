@@ -35,3 +35,15 @@ class IRACFeedback(BaseModel):
     overall_grade: str = Field(description="Letter grade: A, A-, B+, B, B-, C+, C, C-, D, F")
     key_insight: str = Field(description="The single most important thing the student should improve")
     overall_feedback: str = Field(description="2-3 sentence holistic assessment")
+
+
+class CaseBrief(BaseModel):
+    """Structured case brief for law school study."""
+    case_name: str = Field(description="Full citation: Plaintiff v. Defendant, Cite (Year)")
+    facts: str = Field(description="Plain-English facts of the dispute")
+    procedural_posture: str = Field(description="Procedural history through the courts")
+    issue: str = Field(description="Legal question framed as Whether ... given ...")
+    holding: str = Field(description="Direct answer with the court's ruling")
+    reasoning: str = Field(description="Court's analysis and rationale, including the rule applied")
+    dissent: str = Field(description="Summary of dissent if any, else empty string")
+    notes: List[str] = Field(description="Exam-relevant takeaways and significance")

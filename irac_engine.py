@@ -1,6 +1,6 @@
 import json
 import ollama
-from models import IRRACOutput, DualIRAC, IRACFeedback
+from models import IRRACOutput, DualIRAC, IRACFeedback, CaseBrief
 
 MODEL_NAME = "irac-maker"
 
@@ -174,6 +174,41 @@ Produce the issue map. Format:
 
 ### Suggested Analysis Order
 [Brief recommendation]"""
+
+
+CASE_BRIEF_SYSTEM = """You are a legal research assistant briefing an American court case for a law school student.
+
+Output ONLY valid JSON. No prose before or after.
+
+Briefing rules:
+- Be concise but complete. Each section is meant to fit on a flashcard.
+- "case_name": include the full citation if visible (Plaintiff v. Defendant, Reporter Cite (Year)). If only the names appear, use them.
+- "facts": plain-English narrative of the underlying dispute. 3-6 sentences. Drop procedural detail.
+- "procedural_posture": how the case got to this court. Trial court ruling → appellate path. 1-3 sentences.
+- "issue": the precise legal question. Frame as "Whether ... given ...".
+- "holding": direct answer (Yes/No/Affirmed/Reversed/etc) plus a single-sentence statement of the rule the court announced.
+- "reasoning": why the court reached this conclusion. Include the rule applied, key precedents the court relied on, and analysis. This is the longest section.
+- "dissent": one-paragraph summary of dissent(s) if present, else "" (empty string).
+- "notes": 2-3 short bullets — exam significance, common pitfalls, or how this case is typically tested.
+
+Output schema:
+{
+  "case_name": "...",
+  "facts": "...",
+  "procedural_posture": "...",
+  "issue": "Whether ...",
+  "holding": "...",
+  "reasoning": "...",
+  "dissent": "",
+  "notes": ["...", "..."]
+}"""
+
+CASE_BRIEF_PROMPT = """Brief the following case. Respond ONLY with valid JSON matching the schema.
+
+Case text:
+{text}
+
+JSON brief:"""
 
 
 # ── functions ──────────────────────────────────────────────────────────────────
@@ -429,6 +464,95 @@ def stream_zoom_out(facts: str, area: str):
         accumulated += token
         count += 1
         yield (token, accumulated, count)
+
+
+# ── Case Brief ────────────────────────────────────────────────────────────────
+
+# Section markers detected in the streaming JSON for live progress updates.
+_BRIEF_SECTION_LABELS = {
+    '"case_name"':          ("Case Name",          "Identifying the case..."),
+    '"facts"':              ("Facts",              "Extracting the facts..."),
+    '"procedural_posture"': ("Procedural Posture", "Tracing the procedural history..."),
+    '"issue"':              ("Issue",              "Framing the legal question..."),
+    '"holding"':            ("Holding",            "Distilling the holding..."),
+    '"reasoning"':          ("Reasoning",          "Summarizing the court's reasoning..."),
+    '"dissent"':            ("Dissent",            "Capturing the dissent..."),
+    '"notes"':              ("Exam Notes",         "Compiling exam takeaways..."),
+}
+
+
+def generate_case_brief(text: str) -> CaseBrief:
+    """Non-streaming case brief generation. Used as the truncation-fallback path."""
+    prompt = CASE_BRIEF_PROMPT.format(text=text.strip())
+    resp = ollama.chat(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": CASE_BRIEF_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+        format="json",
+        options=_OLLAMA_OPTIONS,
+        keep_alive=_KEEP_ALIVE,
+        think=False,
+    )
+    return CaseBrief(**json.loads(resp["message"]["content"]))
+
+
+def stream_case_brief(text: str):
+    """Yields progress events while streaming the case brief.
+
+    Event types match stream_irreac so the same UI helpers work:
+      ("status", label)        — a new brief section has started
+      ("token",  text)         — raw token
+      ("tick",   count)        — periodic token-counter ping for the progress bar
+      ("done",   CaseBrief)    — generation complete, parsed result
+    """
+    prompt = CASE_BRIEF_PROMPT.format(text=text.strip())
+    stream = ollama.chat(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": CASE_BRIEF_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+        stream=True,
+        options=_OLLAMA_OPTIONS,
+        keep_alive=_KEEP_ALIVE,
+        think=False,
+    )
+
+    full_text = ""
+    seen_sections = set()
+    token_count = 0
+    _TOKEN_STEP = 40
+
+    for chunk in stream:
+        token = chunk["message"]["content"]
+        full_text += token
+        token_count += 1
+        yield ("token", token)
+
+        if token_count % _TOKEN_STEP == 0:
+            yield ("tick", token_count)
+
+        for marker, (_, label) in _BRIEF_SECTION_LABELS.items():
+            if marker in full_text and marker not in seen_sections:
+                seen_sections.add(marker)
+                yield ("status", label)
+                break
+
+    json_start = full_text.find('{')
+    json_end = full_text.rfind('}') + 1
+    json_str = full_text[json_start:json_end] if json_start != -1 else full_text
+    try:
+        result = CaseBrief(**json.loads(json_str))
+    except Exception:
+        # Same repair-then-fall-back-to-non-stream pattern as stream_irreac.
+        try:
+            repaired = _repair_truncated_json(json_str)
+            result = CaseBrief(**json.loads(repaired))
+        except Exception:
+            result = generate_case_brief(text)
+    yield ("done", result)
 
 
 def check_model_ready() -> bool:

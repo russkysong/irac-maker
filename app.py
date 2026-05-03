@@ -39,8 +39,9 @@ for k, v in DEFAULTS.items():
         st.session_state[k] = v
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_gen, tab_both, tab_cmp, tab_soc, tab_about = st.tabs([
-    "Generate IRAC", "Both Sides", "Compare & Feedback", "Socratic Mode", "About",
+tab_gen, tab_brief, tab_both, tab_cmp, tab_soc, tab_about = st.tabs([
+    "Generate IRAC", "Case Brief", "Both Sides", "Compare & Feedback",
+    "Socratic Mode", "About",
 ])
 
 
@@ -150,7 +151,53 @@ with tab_gen:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 2 — BOTH SIDES
+# TAB 2 — CASE BRIEF
+# ════════════════════════════════════════════════════════════════════════════════
+with tab_brief:
+    st.markdown("""
+<div class="irac-card irac-card-blue" style="margin-bottom:1.5rem;">
+    <div class="section-label" style="color:#6a9bcc;">Case Brief</div>
+    <p style="margin:0;font-size:14px;color:#b0aea5;">
+        Paste a case opinion and get a structured brief — Facts, Procedural Posture,
+        Issue, Holding, Reasoning, Dissent, and exam notes. Built for the cold-call
+        moments and the night-before-exam review.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    case_text = st.text_area(
+        "Case opinion",
+        height=320,
+        key="case_text",
+        placeholder=(
+            "Paste the full opinion (or a long excerpt) here.\n\n"
+            "Tip: include the case caption (Plaintiff v. Defendant, Cite, Year) "
+            "if you have it — the brief will use the proper citation."
+        ),
+    )
+    brief_btn = st.button(
+        "Generate Brief",
+        type="primary",
+        use_container_width=True,
+        key="brief_btn",
+    )
+
+    if brief_btn:
+        if not case_text.strip():
+            st.warning("Paste a case opinion first.")
+        elif len(case_text.strip()) < 200:
+            st.warning("This looks too short to be a case opinion. Paste more text.")
+        else:
+            try:
+                brief = C.stream_brief_with_progress(case_text)
+                st.session_state.last_brief = brief
+                C.show_case_brief(brief)
+            except Exception as e:
+                st.error(f"Brief failed: {e}")
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# TAB 3 — BOTH SIDES
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_both:
     st.markdown("""
@@ -204,7 +251,7 @@ with tab_both:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 3 — COMPARE & FEEDBACK
+# TAB 4 — COMPARE & FEEDBACK
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_cmp:
     st.markdown("""
@@ -447,7 +494,7 @@ with tab_cmp:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 4 — SOCRATIC MODE
+# TAB 5 — SOCRATIC MODE
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_soc:
     st.markdown("""
@@ -576,7 +623,7 @@ with tab_soc:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 5 — ABOUT
+# TAB 6 — ABOUT
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_about:
     # ── Modes (single-column stack) ────────────────────────────────────────────
@@ -587,6 +634,12 @@ with tab_about:
         <div class="section-label">Generate IRAC</div>
         <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
             Paste a fact pattern — AI drafts a full structured IRAC analysis with citations and element-by-element application.
+        </div>
+    </div>
+    <div class="irac-card irac-card-blue" style="padding:16px 18px;">
+        <div class="section-label" style="color:#6a9bcc;">Case Brief</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Paste a court opinion — get a structured brief with Facts, Procedural Posture, Issue, Holding, Reasoning, Dissent, and exam notes.
         </div>
     </div>
     <div class="irac-card irac-card-blue" style="padding:16px 18px;">

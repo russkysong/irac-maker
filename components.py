@@ -172,6 +172,57 @@ def show_irreac(result: IRRACOutput, expanded: bool = True):
             )
 
 
+# ── Case Brief renderer ───────────────────────────────────────────────────────
+
+def show_case_brief(brief, expanded: bool = True):
+    """Renders a CaseBrief in styled expanders.
+
+    Mirrors show_irreac's visual rhythm so the two outputs feel like one app.
+    The Dissent expander only renders if there's actually a dissent.
+    """
+    # Case name as a header card before the expanders.
+    st.markdown(
+        f'<div class="irac-card irac-card-accent" style="margin-bottom:1rem;padding:14px 18px;">'
+        f'<div class="section-label">Case Name</div>'
+        f'<div style="font-family:Lora,serif;font-size:15px;color:#faf9f5;font-weight:600;">'
+        f'{brief.case_name or "(not identified)"}'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    sections = [
+        ("Facts", brief.facts, "irac-card-blue"),
+        ("Procedural Posture", brief.procedural_posture, "irac-card-blue"),
+        ("Issue", brief.issue, "irac-card-accent"),
+        ("Holding", brief.holding, "irac-card-green"),
+        ("Reasoning", brief.reasoning, "irac-card-accent"),
+    ]
+    for label, content, _ in sections:
+        with st.expander(f"**{label}**", expanded=expanded):
+            st.markdown(content or "*Not provided*")
+
+    if brief.dissent.strip():
+        with st.expander("**Dissent**", expanded=expanded):
+            st.markdown(brief.dissent)
+
+    if brief.notes:
+        st.markdown(
+            '<div style="margin-top:1rem;">'
+            '<div class="section-label">Exam Notes</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        for note in brief.notes:
+            st.markdown(
+                f'<div class="irac-card" style="margin-bottom:6px;padding:10px 14px;">'
+                f'<span style="color:#d97757;font-weight:700;margin-right:8px;">—</span>'
+                f'<span style="font-family:Lora,serif;font-size:14px;color:#e8e6dc;">{note}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+
+
 # ── Progress bar ──────────────────────────────────────────────────────────────
 
 # Maps stream status labels → (percentage, sublabel)
@@ -182,6 +233,18 @@ _PROGRESS_STEPS = {
     "Applying rules to the facts...":             (72, "Analyzing each element against the specific facts"),
     "Drafting conclusion...":                     (88, "Writing the final answer with confidence level"),
     "Preparing study tips...":                    (95, "Identifying common mistakes on this issue type"),
+}
+
+# Same shape, different labels — used by the Case Brief streaming pipeline.
+_BRIEF_PROGRESS_STEPS = {
+    "Identifying the case...":                  (8,  "Reading citation and party names"),
+    "Extracting the facts...":                  (22, "Distilling what happened, in plain English"),
+    "Tracing the procedural history...":        (35, "How the case got to this court"),
+    "Framing the legal question...":            (48, "Pinning down the precise issue"),
+    "Distilling the holding...":                (62, "What the court decided and the rule it announced"),
+    "Summarizing the court's reasoning...":     (80, "Why the court ruled this way"),
+    "Capturing the dissent...":                 (90, "Recording any dissenting opinion"),
+    "Compiling exam takeaways...":              (96, "Why this case matters for your exam"),
 }
 
 
@@ -267,6 +330,46 @@ def stream_with_progress(facts: str, area: str,
             result = data
 
     _render_progress(slot, end_pct, "Complete", "", done=True)
+    time.sleep(0.6)
+    slot.empty()
+    return result
+
+
+def stream_brief_with_progress(text: str, phase: str = "Briefing the case"):
+    """Same animated progress bar as stream_with_progress, but for case briefs.
+
+    Reuses _BRIEF_PROGRESS_STEPS (case-brief-specific labels) and the engine's
+    stream_case_brief generator. Returns the parsed CaseBrief.
+    """
+    from irac_engine import stream_case_brief
+
+    slot = st.empty()
+    _render_progress(slot, 0, phase, "Reading the case opinion...")
+
+    result = None
+    current_pct = 0
+    current_label = phase
+    current_sublabel = "Reading the case opinion..."
+    last_section_pct = 0
+
+    for event, data in stream_case_brief(text):
+        if event == "status":
+            step_pct, sublabel = _BRIEF_PROGRESS_STEPS.get(data, (current_pct + 5, ""))
+            current_pct = max(current_pct, step_pct)
+            last_section_pct = current_pct
+            current_label = data
+            current_sublabel = sublabel
+            _render_progress(slot, current_pct, current_label, current_sublabel)
+        elif event == "tick":
+            token_count = data
+            tick_pct = min(int(token_count / 800 * 15), 15)
+            if tick_pct > current_pct and last_section_pct == 0:
+                current_pct = tick_pct
+                _render_progress(slot, current_pct, current_label, current_sublabel)
+        elif event == "done":
+            result = data
+
+    _render_progress(slot, 100, "Complete", "", done=True)
     time.sleep(0.6)
     slot.empty()
     return result
