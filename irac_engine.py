@@ -1,6 +1,6 @@
 import json
 import ollama
-from models import IRRACOutput, DualIRAC, IRACFeedback, CaseBrief
+from models import IRRACOutput, DualIRAC, IRACFeedback, CaseBrief, IssueSpottingResult
 
 MODEL_NAME = "irac-maker"
 
@@ -230,6 +230,40 @@ Case text:
 {text}
 
 JSON brief:"""
+
+
+ISSUE_SPOT_SYSTEM = """You are a tough but fair American law school professor running an issue-spotting drill.
+
+Your job is NOT to write a full IRAC. You are only judging COVERAGE: did the student spot every issue the facts raise?
+
+Rules:
+- First, internally identify EVERY real issue the facts raise in the given area of law (including procedural, threshold, and sub-issues).
+- Then compare to the student's listed issues.
+- For each real issue, decide: did the student catch it (full match), or miss it (no plausible match in their list)?
+- A loose paraphrase counts as a catch — focus on substance, not exact wording.
+- If the student listed something that isn't actually an issue here, put it in "student_extra".
+- coverage_score is "<caught> / <total_real_issues>", e.g. "4/6".
+- Be specific in rationales — quote a fact that triggers each issue.
+
+Output ONLY valid JSON:
+{
+  "student_caught": [{"name": "<issue>", "rationale": "<one sentence>"}],
+  "student_missed": [{"name": "<issue>", "rationale": "<one sentence>"}],
+  "student_extra":  ["<thing student listed that isn't really an issue>"],
+  "coverage_score": "X/Y",
+  "overall_feedback": "<2-3 sentence holistic note>"
+}"""
+
+
+ISSUE_SPOT_PROMPT = """Area of Law: {area}
+
+Facts:
+{facts}
+
+Student's spotted issues (one per line):
+{student_issues}
+
+Grade the coverage. Respond ONLY with valid JSON."""
 
 
 # ── functions ──────────────────────────────────────────────────────────────────
@@ -468,6 +502,21 @@ def compare_irac(
         )
     resp = _chat(FEEDBACK_SYSTEM, prompt, use_json=True)
     return IRACFeedback(**json.loads(resp["message"]["content"]))
+
+
+def grade_issue_spot(facts: str, area: str, student_issues: str) -> IssueSpottingResult:
+    """Grade a student's issue-spotting drill against the facts.
+
+    student_issues is the raw textarea content — the model handles formatting
+    (one per line, numbered, bulleted, prose-style — all OK).
+    """
+    prompt = ISSUE_SPOT_PROMPT.format(
+        area=area,
+        facts=facts.strip(),
+        student_issues=student_issues.strip() or "(none provided)",
+    )
+    resp = _chat(ISSUE_SPOT_SYSTEM, prompt, use_json=True)
+    return IssueSpottingResult(**json.loads(resp["message"]["content"]))
 
 
 def socratic_next_question(facts: str, area: str, history: list[dict]) -> str:

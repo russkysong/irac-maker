@@ -37,6 +37,41 @@ class IRACFeedback(BaseModel):
     overall_feedback: str = Field(description="2-3 sentence holistic assessment")
 
 
+class SpottedIssue(BaseModel):
+    """A single issue identified during Issue Spotting grading."""
+    name: str = Field(description="Short name for the issue, e.g. 'Mirror image rule' or 'Promissory estoppel'")
+    rationale: str = Field(default="", description="One-sentence reason why this issue arises in the facts")
+
+
+class IssueSpottingResult(BaseModel):
+    """Result of grading a student's issue-spotting drill.
+
+    The grader categorizes every issue into one of three buckets and gives
+    a coverage score. We accept defaults so a partially-emitted JSON still
+    renders rather than crashing.
+    """
+    student_caught: List[SpottedIssue] = Field(
+        default_factory=list,
+        description="Real issues the student correctly identified",
+    )
+    student_missed: List[SpottedIssue] = Field(
+        default_factory=list,
+        description="Real issues the student did not list",
+    )
+    student_extra: List[str] = Field(
+        default_factory=list,
+        description="Items on the student's list that aren't real issues here",
+    )
+    coverage_score: str = Field(
+        default="",
+        description="Fraction string, e.g. '4/6' (caught / total real issues)",
+    )
+    overall_feedback: str = Field(
+        default="",
+        description="2-3 sentence holistic note for the student",
+    )
+
+
 class CaseBrief(BaseModel):
     """Structured case brief for law school study.
 

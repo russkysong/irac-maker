@@ -75,6 +75,29 @@ def save_brief(case_text: str, result_dict: dict) -> dict:
     return entry
 
 
+def save_spot(facts: str, area: str, student_issues: str, result_dict: dict) -> dict:
+    """Persist an Issue Spotting drill. Returns the saved entry metadata.
+
+    Title is the coverage score + first line of facts so the History list
+    shows at-a-glance which drill it was.
+    """
+    _ensure_dir()
+    score = result_dict.get("coverage_score", "—")
+    first_line = _truncate((facts.strip().split("\n", 1)[0] or "(untitled drill)"), 60)
+    entry = {
+        "id": _new_id(),
+        "type": "spot",
+        "title": _truncate(f"Spot {score} — {first_line}", 90),
+        "area": area,
+        "facts": facts.strip(),
+        "student_issues": student_issues.strip(),
+        "result": result_dict,
+        "saved_at": _now(),
+    }
+    _entry_path(entry["id"]).write_text(json.dumps(entry, indent=2))
+    return entry
+
+
 def delete_entry(entry_id: str) -> None:
     p = _entry_path(entry_id)
     if p.exists():

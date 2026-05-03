@@ -7,7 +7,7 @@ import components as C
 import outlines
 import history
 from irac_engine import (
-    compare_irac,
+    compare_irac, grade_issue_spot,
     socratic_next_question, check_model_ready, AREAS_OF_LAW,
 )
 from export import export_to_pdf
@@ -43,9 +43,9 @@ for k, v in DEFAULTS.items():
         st.session_state[k] = v
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_gen, tab_brief, tab_both, tab_cmp, tab_soc, tab_outlines, tab_history, tab_about = st.tabs([
-    "Generate IRAC", "Case Brief", "Both Sides", "Compare & Feedback",
-    "Socratic Mode", "My Outlines", "History", "About",
+tab_gen, tab_brief, tab_both, tab_spot, tab_cmp, tab_soc, tab_outlines, tab_history, tab_about = st.tabs([
+    "Generate IRAC", "Case Brief", "Both Sides", "Issue Spotting",
+    "Compare & Feedback", "Socratic Mode", "My Outlines", "History", "About",
 ])
 
 
@@ -265,7 +265,85 @@ with tab_both:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 4 — COMPARE & FEEDBACK
+# TAB 4 — ISSUE SPOTTING
+# ════════════════════════════════════════════════════════════════════════════════
+with tab_spot:
+    st.markdown("""
+<div class="irac-card irac-card-accent" style="margin-bottom:1.5rem;">
+    <div class="section-label">Issue Spotting Drill</div>
+    <p style="margin:0;font-size:14px;color:#b0aea5;">
+        A fast-feedback exercise — paste a hypo, list every legal issue you can spot
+        (one per line), and get scored on coverage. The grader returns what you caught,
+        what you missed, and any false alarms. No full IRAC required.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    _area_spot = st.session_state.get("area_spot_value") or st.session_state.get("last_area") or "Contracts"
+    if st.button(f"⚖️ Area of Law: {_area_spot}", key="btn_area_spot"):
+        C.pick_area_dialog("area_spot_value")
+    area_spot = _area_spot
+
+    facts_spot = st.text_area(
+        "Facts",
+        height=200,
+        key="facts_spot",
+        placeholder="Paste the fact pattern here...",
+    )
+    issues_spot = st.text_area(
+        "Issues you spotted (one per line)",
+        height=180,
+        key="issues_spot",
+        placeholder=(
+            "List each issue you see. One per line. Loose phrasing is fine.\n\n"
+            "e.g.\n"
+            "- Mirror image rule / counter-offer\n"
+            "- Statute of frauds (sale of goods over $500)\n"
+            "- Promissory estoppel"
+        ),
+    )
+
+    spot_btn = st.button(
+        "Grade my spotting",
+        type="primary",
+        use_container_width=True,
+        key="spot_btn",
+    )
+
+    if spot_btn:
+        if not facts_spot.strip():
+            st.warning("Paste facts first.")
+        elif not issues_spot.strip():
+            st.warning("List at least one issue you think you spotted.")
+        else:
+            try:
+                spot_result = C.run_with_time_progress(
+                    grade_issue_spot,
+                    phase="Grading your spotting",
+                    est_seconds=35,
+                    sublabels=[
+                        (0,  "Reading the facts..."),
+                        (30, "Identifying every real issue..."),
+                        (65, "Matching against your list..."),
+                        (88, "Scoring coverage and writing feedback..."),
+                    ],
+                    facts=facts_spot, area=area_spot,
+                    student_issues=issues_spot,
+                )
+                # Auto-save to history (non-blocking).
+                try:
+                    history.save_spot(facts_spot, area_spot, issues_spot,
+                                      spot_result.model_dump())
+                except Exception:
+                    pass
+                st.divider()
+                C.show_issue_spotting(spot_result)
+            except Exception as e:
+                st.error(f"Grading failed: {e}")
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# TAB 5 — COMPARE & FEEDBACK
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_cmp:
     st.markdown("""
@@ -508,7 +586,7 @@ with tab_cmp:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 5 — SOCRATIC MODE
+# TAB 6 — SOCRATIC MODE
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_soc:
     st.markdown("""
@@ -637,7 +715,7 @@ with tab_soc:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 6 — MY OUTLINES
+# TAB 7 — MY OUTLINES
 # ════════════════════════════════════════════════════════════════════════════════
 def _humanize_age(iso_ts: str) -> str:
     """Render '2 days ago' / 'just now' from an ISO timestamp."""
@@ -758,9 +836,13 @@ with tab_outlines:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 7 — HISTORY
+# TAB 8 — HISTORY
 # ════════════════════════════════════════════════════════════════════════════════
-from models import IRRACOutput as _IRRACOutput, CaseBrief as _CaseBrief
+from models import (
+    IRRACOutput as _IRRACOutput,
+    CaseBrief as _CaseBrief,
+    IssueSpottingResult as _IssueSpottingResult,
+)
 
 with tab_history:
     st.markdown("""
@@ -784,10 +866,10 @@ with tab_history:
     with col_t:
         history_type = st.pills(
             "Type",
-            ["all", "irac", "brief"],
+            ["all", "irac", "brief", "spot"],
             default="all",
             key="history_type",
-            format_func=lambda x: {"all": "All", "irac": "IRACs", "brief": "Briefs"}[x],
+            format_func=lambda x: {"all": "All", "irac": "IRACs", "brief": "Briefs", "spot": "Spot Drills"}[x],
             label_visibility="collapsed",
         ) or "all"
     with col_clear:
@@ -815,8 +897,16 @@ with tab_history:
         for entry in entries:
             entry_id = entry.get("id", "")
             entry_type_v = entry.get("type", "irac")
-            type_color = "#d97757" if entry_type_v == "irac" else "#6a9bcc"
-            type_label = "IRAC" if entry_type_v == "irac" else "Brief"
+            type_color = {
+                "irac":  "#d97757",
+                "brief": "#6a9bcc",
+                "spot":  "#788c5d",
+            }.get(entry_type_v, "#b0aea5")
+            type_label = {
+                "irac":  "IRAC",
+                "brief": "Brief",
+                "spot":  "Spot Drill",
+            }.get(entry_type_v, entry_type_v.upper())
             area = entry.get("area")
             saved_iso = entry.get("saved_at", "")
             age = _humanize_age(saved_iso)
@@ -858,6 +948,14 @@ with tab_history:
                             with st.expander("Original facts", expanded=False):
                                 st.markdown(html.escape(entry["facts"]))
                         C.show_irreac(_IRRACOutput(**result))
+                    elif entry_type_v == "spot":
+                        if entry.get("facts"):
+                            with st.expander("Original facts", expanded=False):
+                                st.markdown(html.escape(entry["facts"]))
+                        if entry.get("student_issues"):
+                            with st.expander("Your spotted issues", expanded=False):
+                                st.markdown(html.escape(entry["student_issues"]))
+                        C.show_issue_spotting(_IssueSpottingResult(**result))
                     else:  # brief
                         if entry.get("case_text"):
                             with st.expander("Original case text", expanded=False):
@@ -887,7 +985,7 @@ with tab_history:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 8 — ABOUT
+# TAB 9 — ABOUT
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_about:
     # ── Modes (single-column stack) ────────────────────────────────────────────
@@ -910,6 +1008,12 @@ with tab_about:
         <div class="section-label" style="color:#6a9bcc;">Both Sides</div>
         <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
             Generates the plaintiff's strongest argument and the defendant's strongest argument side by side.
+        </div>
+    </div>
+    <div class="irac-card irac-card-green" style="padding:16px 18px;">
+        <div class="section-label" style="color:#788c5d;">Issue Spotting</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Drill-style: paste a hypo, list every issue you can spot, get scored on coverage. Faster feedback than writing a full IRAC.
         </div>
     </div>
     <div class="irac-card irac-card-green" style="padding:16px 18px;">

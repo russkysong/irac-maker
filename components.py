@@ -172,6 +172,89 @@ def show_irreac(result: IRRACOutput, expanded: bool = True):
             )
 
 
+# ── Issue Spotting renderer ───────────────────────────────────────────────────
+
+def show_issue_spotting(result):
+    """Renders an IssueSpottingResult: coverage score badge + 3 lists.
+
+    The three buckets get color-coded so the student can scan in seconds:
+      green = caught, orange = missed, gray-red = false alarm.
+    """
+    # Coverage score header — parse "4/6" into a percentage for the bar.
+    score = result.coverage_score or ""
+    pct = 0
+    try:
+        if "/" in score:
+            num, denom = score.split("/", 1)
+            num_i, denom_i = int(num.strip()), int(denom.strip())
+            pct = int(num_i / denom_i * 100) if denom_i else 0
+    except (ValueError, ZeroDivisionError):
+        pct = 0
+
+    bar_color = "#788c5d" if pct >= 80 else ("#d97757" if pct >= 50 else "#ef4444")
+    st.markdown(f"""
+<div class="irac-card" style="margin-bottom:1.25rem;padding:18px 22px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;">
+        <div>
+            <div class="section-label">Coverage</div>
+            <div style="font-family:Poppins,sans-serif;font-size:14px;color:#b0aea5;">
+                Caught {len(result.student_caught)} of {len(result.student_caught) + len(result.student_missed)} real issues
+            </div>
+        </div>
+        <div style="font-family:Poppins,sans-serif;font-size:34px;font-weight:700;color:{bar_color};line-height:1;">
+            {score or '—'}
+        </div>
+    </div>
+    <div style="background:#2a2925;border-radius:6px;height:8px;overflow:hidden;">
+        <div style="width:{pct}%;height:100%;background:{bar_color};transition:width 0.4s ease;"></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+    if result.overall_feedback.strip():
+        st.markdown(
+            f'<div class="irac-card" style="font-family:Lora,serif;font-style:italic;'
+            f'color:#e8e6dc;margin-bottom:1.25rem;">'
+            f'"{result.overall_feedback}"</div>',
+            unsafe_allow_html=True,
+        )
+
+    def _bucket(label: str, color: str, items, empty_msg: str, name_key: str = "name", rationale_key: str = "rationale"):
+        st.markdown(
+            f'<div class="section-label" style="color:{color};margin-top:8px;">{label}</div>',
+            unsafe_allow_html=True,
+        )
+        if not items:
+            st.markdown(
+                f'<div class="irac-card" style="padding:10px 14px;font-family:Lora,serif;'
+                f'font-style:italic;color:#6e6c65;">{empty_msg}</div>',
+                unsafe_allow_html=True,
+            )
+            return
+        for it in items:
+            if hasattr(it, name_key):
+                name = getattr(it, name_key)
+                rationale = getattr(it, rationale_key, "")
+            else:
+                name, rationale = str(it), ""
+            st.markdown(
+                f'<div class="irac-card" style="padding:10px 14px;margin-bottom:5px;'
+                f'border-left:3px solid {color};">'
+                f'<div style="font-family:Poppins,sans-serif;font-weight:600;font-size:14px;color:#faf9f5;">{name}</div>'
+                + (f'<div style="font-family:Lora,serif;font-size:13px;color:#b0aea5;margin-top:4px;">{rationale}</div>' if rationale else '')
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+
+    _bucket("✓ Caught", "#788c5d", result.student_caught,
+            "You didn't catch any of the real issues this round.")
+    _bucket("✗ Missed", "#d97757", result.student_missed,
+            "Nothing missed — full coverage.")
+    if result.student_extra:
+        _bucket("? False alarm", "#b0aea5", result.student_extra,
+                "", name_key="(no_attr)", rationale_key="(no_attr)")
+
+
 # ── Case Brief renderer ───────────────────────────────────────────────────────
 
 def show_case_brief(brief, expanded: bool = True):
