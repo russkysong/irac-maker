@@ -109,25 +109,24 @@ Conclusion: {student_conclusion}
 
 Grade the student's IRAC. Respond ONLY with valid JSON."""
 
-WHOLE_TEXT_FEEDBACK_PROMPT = """Area of Law: {area}
+WHOLE_STUDENT_FEEDBACK_PROMPT = """Area of Law: {area}
 
 Facts:
 {facts}
 
---- REFERENCE IRAC (provided as ONE block of text — internally identify the
-Issue, Rule, Application, and Conclusion sections within it before grading) ---
-{reference_text}
+--- MODEL IRREAC (the reference) ---
+Issue: {model_issue}
+Rule Statement: {model_rule_statement}
+Rule Exploration: {model_rule_exploration}
+Application: {model_application}
+Conclusion: {model_conclusion}
 
---- STUDENT IRAC ---
-Issue: {student_issue}
-Rule: {student_rule}
-Application: {student_application}
-Conclusion: {student_conclusion}
+--- STUDENT IRAC (provided as ONE block of text — first identify the
+Issue, Rule, Application, and Conclusion sections inside it, then grade
+each one separately against the model) ---
+{student_text}
 
-Grade the student's IRAC against the reference. Compare each student section
-to the corresponding part of the reference text. If the reference omits a
-section (e.g., no Rule Exploration), do not penalize the student for that
-omission. Respond ONLY with valid JSON."""
+Grade the student's IRAC against the model. Respond ONLY with valid JSON."""
 
 SOCRATIC_SYSTEM = """You are a law professor using the Socratic method to help a student identify legal issues in a fact pattern.
 
@@ -340,34 +339,35 @@ def generate_dual_irac(facts: str, area: str = "Contracts") -> DualIRAC:
 def compare_irac(
     facts: str,
     area: str,
-    student_issue: str,
-    student_rule: str,
-    student_application: str,
-    student_conclusion: str,
-    model_irac: IRRACOutput,
+    student_issue: str = "",
+    student_rule: str = "",
+    student_application: str = "",
+    student_conclusion: str = "",
+    model_irac: IRRACOutput | None = None,
+    student_full_text: str = "",
 ) -> IRACFeedback:
-    # Whole-text reference detection: when the user pastes a single block, the
-    # caller stuffs the entire text into `application` and leaves issue,
-    # rule_statement, rule_exploration, and conclusion empty. We then send a
-    # different prompt that asks the grader to identify sections within the
-    # block rather than line them up against pre-split fields.
-    is_whole_text = (
-        not model_irac.issue.strip()
-        and not model_irac.rule_statement.strip()
-        and not model_irac.rule_exploration.strip()
-        and not model_irac.conclusion.strip()
-        and bool(model_irac.application.strip())
-    )
+    """Grade a student IRAC against the AI-drafted model IRREAC.
 
-    if is_whole_text:
-        prompt = WHOLE_TEXT_FEEDBACK_PROMPT.format(
+    The student input can come in two shapes:
+      • Section by section: pass `student_issue/rule/application/conclusion`
+        and leave `student_full_text` empty.
+      • Whole-paste: pass `student_full_text` (the four section args are
+        ignored). The grader is told to identify the I/R/A/C sections
+        inside the block before scoring each one.
+    """
+    if model_irac is None:
+        raise ValueError("compare_irac requires a model_irac (the AI-drafted reference).")
+
+    if student_full_text.strip():
+        prompt = WHOLE_STUDENT_FEEDBACK_PROMPT.format(
             area=area,
             facts=facts.strip(),
-            reference_text=model_irac.application.strip(),
-            student_issue=student_issue.strip() or "(not provided)",
-            student_rule=student_rule.strip() or "(not provided)",
-            student_application=student_application.strip() or "(not provided)",
-            student_conclusion=student_conclusion.strip() or "(not provided)",
+            model_issue=model_irac.issue,
+            model_rule_statement=model_irac.rule_statement,
+            model_rule_exploration=model_irac.rule_exploration,
+            model_application=model_irac.application,
+            model_conclusion=model_irac.conclusion,
+            student_text=student_full_text.strip(),
         )
     else:
         prompt = FEEDBACK_PROMPT.format(

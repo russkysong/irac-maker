@@ -6,7 +6,6 @@ from irac_engine import (
     compare_irac,
     socratic_next_question, check_model_ready, AREAS_OF_LAW,
 )
-from models import IRRACOutput
 from export import export_to_pdf
 
 # ── Page config ────────────────────────────────────────────────────────────────
@@ -246,19 +245,20 @@ with tab_cmp:
 
     # ── Mode selector ──────────────────────────────────────────────────────────
     cmp_mode = st.radio(
-        "Reference IRAC source",
+        "How would you like to enter your IRAC?",
         [
-            "Compare against AI-drafted answer",
-            "Compare against my own reference IRAC",
+            "Section by section (I, R, A, C)",
+            "Paste my whole IRAC as one block",
         ],
         horizontal=True,
         key="cmp_mode",
         help=(
-            "AI-drafted: the model generates the reference IRAC from the facts. "
-            "Own reference: paste an IRAC you want to grade against (e.g., a textbook model answer)."
+            "Section by section: write each I/R/A/C field individually with tips and word counts. "
+            "Paste whole: drop in an IRAC you wrote elsewhere as one block of text. "
+            "Either way, the AI drafts a model answer from the facts and grades you against it."
         ),
     )
-    is_manual = cmp_mode == "Compare against my own reference IRAC"
+    is_paste = cmp_mode == "Paste my whole IRAC as one block"
 
     area_cmp = st.pills(
         "Area of Law", AREAS_OF_LAW,
@@ -270,95 +270,93 @@ with tab_cmp:
         placeholder="Paste the hypo facts here...",
     )
 
-    st.markdown('<div class="section-label" style="margin-top:1rem;">Your IRAC Draft</div>', unsafe_allow_html=True)
-    st.caption("Write each section separately. Even a rough draft earns better feedback than a blank page.")
+    # Defaults so the variables exist regardless of branch taken.
+    student_issue = student_rule = student_app = student_conc = ""
+    student_full_text = ""
 
-    # Issue + Rule row
-    # Streamlit anti-pattern note: setting `value=` on a widget with a `key=`
-    # only works on the first render. After session_state[key] exists, `value`
-    # is silently ignored. To inject template text we must write the widget's
-    # session_state key directly, BEFORE the widget is constructed, then rerun.
-    col_i, col_r = st.columns(2)
-    with col_i:
-        C.section_tip("issue")
-        col_i_hdr, col_i_btn = st.columns([3, 1])
-        with col_i_hdr:
-            st.markdown("**I — Issue**")
-        with col_i_btn:
-            if st.button("Template", key="tpl_i", use_container_width=True):
-                st.session_state["s_issue"] = C.starter_template("issue")
-                st.rerun()
-        student_issue = st.text_area(
-            "Issue", height=110, label_visibility="collapsed", key="s_issue",
-            placeholder="Whether ... given ...",
-        )
-        C.word_count_bar(student_issue, "issue")
+    if not is_paste:
+        # ── Section-by-section input (default) ─────────────────────────────────
+        st.markdown('<div class="section-label" style="margin-top:1rem;">Your IRAC Draft</div>', unsafe_allow_html=True)
+        st.caption("Write each section separately. Even a rough draft earns better feedback than a blank page.")
 
-    with col_r:
-        C.section_tip("rule")
-        col_r_hdr, col_r_btn = st.columns([3, 1])
-        with col_r_hdr:
-            st.markdown("**R — Rule**")
-        with col_r_btn:
-            if st.button("Template", key="tpl_r", use_container_width=True):
-                st.session_state["s_rule"] = C.starter_template("rule")
-                st.rerun()
-        student_rule = st.text_area(
-            "Rule", height=110, label_visibility="collapsed", key="s_rule",
-            placeholder="Under [statute/case], the rule requires...",
-        )
-        C.word_count_bar(student_rule, "rule")
+        # Streamlit anti-pattern note: setting `value=` on a widget with a `key=`
+        # only works on the first render. After session_state[key] exists, `value`
+        # is silently ignored. To inject template text we must write the widget's
+        # session_state key directly, BEFORE the widget is constructed, then rerun.
+        col_i, col_r = st.columns(2)
+        with col_i:
+            C.section_tip("issue")
+            col_i_hdr, col_i_btn = st.columns([3, 1])
+            with col_i_hdr:
+                st.markdown("**I — Issue**")
+            with col_i_btn:
+                if st.button("Template", key="tpl_i", use_container_width=True):
+                    st.session_state["s_issue"] = C.starter_template("issue")
+                    st.rerun()
+            student_issue = st.text_area(
+                "Issue", height=110, label_visibility="collapsed", key="s_issue",
+                placeholder="Whether ... given ...",
+            )
+            C.word_count_bar(student_issue, "issue")
 
-    # Application + Conclusion row
-    col_a, col_c = st.columns(2)
-    with col_a:
-        C.section_tip("application")
-        col_a_hdr, col_a_btn = st.columns([3, 1])
-        with col_a_hdr:
-            st.markdown("**A — Application**")
-        with col_a_btn:
-            if st.button("Template", key="tpl_a", use_container_width=True):
-                st.session_state["s_app"] = C.starter_template("application")
-                st.rerun()
-        student_app = st.text_area(
-            "Application", height=200, label_visibility="collapsed", key="s_app",
-            placeholder="Element 1: ...\nElement 2: ...",
-        )
-        C.word_count_bar(student_app, "application")
+        with col_r:
+            C.section_tip("rule")
+            col_r_hdr, col_r_btn = st.columns([3, 1])
+            with col_r_hdr:
+                st.markdown("**R — Rule**")
+            with col_r_btn:
+                if st.button("Template", key="tpl_r", use_container_width=True):
+                    st.session_state["s_rule"] = C.starter_template("rule")
+                    st.rerun()
+            student_rule = st.text_area(
+                "Rule", height=110, label_visibility="collapsed", key="s_rule",
+                placeholder="Under [statute/case], the rule requires...",
+            )
+            C.word_count_bar(student_rule, "rule")
 
-    with col_c:
-        C.section_tip("conclusion")
-        col_c_hdr, col_c_btn = st.columns([3, 1])
-        with col_c_hdr:
-            st.markdown("**C — Conclusion**")
-        with col_c_btn:
-            if st.button("Template", key="tpl_c", use_container_width=True):
-                st.session_state["s_conc"] = C.starter_template("conclusion")
-                st.rerun()
-        student_conc = st.text_area(
-            "Conclusion", height=200, label_visibility="collapsed", key="s_conc",
-            placeholder="Therefore, ...",
-        )
-        C.word_count_bar(student_conc, "conclusion")
+        col_a, col_c = st.columns(2)
+        with col_a:
+            C.section_tip("application")
+            col_a_hdr, col_a_btn = st.columns([3, 1])
+            with col_a_hdr:
+                st.markdown("**A — Application**")
+            with col_a_btn:
+                if st.button("Template", key="tpl_a", use_container_width=True):
+                    st.session_state["s_app"] = C.starter_template("application")
+                    st.rerun()
+            student_app = st.text_area(
+                "Application", height=200, label_visibility="collapsed", key="s_app",
+                placeholder="Element 1: ...\nElement 2: ...",
+            )
+            C.word_count_bar(student_app, "application")
 
-    # ── Reference IRAC input (only when manual mode) ──────────────────────────
-    ref_full_text = ""
-    if is_manual:
-        st.divider()
-        st.markdown('<div class="section-label">Reference IRAC (whole)</div>', unsafe_allow_html=True)
+        with col_c:
+            C.section_tip("conclusion")
+            col_c_hdr, col_c_btn = st.columns([3, 1])
+            with col_c_hdr:
+                st.markdown("**C — Conclusion**")
+            with col_c_btn:
+                if st.button("Template", key="tpl_c", use_container_width=True):
+                    st.session_state["s_conc"] = C.starter_template("conclusion")
+                    st.rerun()
+            student_conc = st.text_area(
+                "Conclusion", height=200, label_visibility="collapsed", key="s_conc",
+                placeholder="Therefore, ...",
+            )
+            C.word_count_bar(student_conc, "conclusion")
+    else:
+        # ── Whole-paste input ──────────────────────────────────────────────────
+        st.markdown('<div class="section-label" style="margin-top:1rem;">Your IRAC</div>', unsafe_allow_html=True)
         st.caption(
-            "Paste the whole IRAC you want to compare against — one block of text. "
-            "Section labels (Issue:, Rule:, Application:, Conclusion: or I:, R:, A:, C:) help, "
-            "but aren't required."
+            "Paste the whole IRAC you wrote elsewhere as one block of text. Section labels "
+            "(Issue:, Rule:, Application:, Conclusion: or I:, R:, A:, C:) help the grader, but aren't required."
         )
-        ref_full_text = st.text_area(
-            "Reference IRAC",
+        student_full_text = st.text_area(
+            "Your IRAC",
             height=320,
             label_visibility="collapsed",
-            key="r_full",
+            key="s_full",
             placeholder=(
-                "Paste a textbook model answer, your professor's answer key, or any "
-                "complete IRAC here as one block.\n\n"
                 "Issue: ...\n"
                 "Rule: ...\n"
                 "Application: ...\n"
@@ -366,43 +364,42 @@ with tab_cmp:
             ),
         )
 
-    btn_label = (
-        "Compare with My Reference + Get Feedback"
-        if is_manual
-        else "Generate AI IRAC + Get Feedback"
+    cmp_btn = st.button(
+        "Generate AI IRAC + Get Feedback",
+        type="primary", use_container_width=True,
     )
-    cmp_btn = st.button(btn_label, type="primary", use_container_width=True)
 
     if cmp_btn:
         if not facts_cmp.strip():
             st.warning("Paste facts first.")
-        elif not any([student_issue.strip(), student_rule.strip(), student_app.strip(), student_conc.strip()]):
+        elif is_paste and not student_full_text.strip():
+            st.warning("Paste your IRAC before comparing.")
+        elif (not is_paste) and not any(
+            [student_issue.strip(), student_rule.strip(), student_app.strip(), student_conc.strip()]
+        ):
             st.warning("Write at least one section of your draft before comparing.")
-        elif is_manual and not ref_full_text.strip():
-            st.warning("Paste your reference IRAC before comparing.")
         else:
             try:
-                if is_manual:
-                    # Whole-text reference: stash the full paste in `application` so
-                    # the existing IRRACOutput model can carry it. compare_irac
-                    # detects an empty rule_statement+issue+conclusion and switches
-                    # to whole-text grading mode.
-                    model_irac = IRRACOutput(
-                        issue="",
-                        rule_statement="",
-                        rule_exploration="",
-                        application=ref_full_text.strip(),
-                        conclusion="",
-                        tips=[],
-                    )
-                else:
-                    model_irac = C.stream_with_progress(
-                        facts_cmp, area_cmp, start_pct=0, end_pct=70,
-                        phase="Generating model IRAC",
-                    )
+                model_irac = C.stream_with_progress(
+                    facts_cmp, area_cmp, start_pct=0, end_pct=70,
+                    phase="Generating model IRAC",
+                )
                 st.session_state.last_irac = model_irac
                 st.session_state.last_facts = facts_cmp
                 st.session_state.last_area = area_cmp
+
+                # In paste mode, the whole text fills all four student fields —
+                # compare_irac dedupes them and sends one combined block to the grader.
+                cmp_kwargs = dict(
+                    facts=facts_cmp, area=area_cmp,
+                    student_issue=student_issue,
+                    student_rule=student_rule,
+                    student_application=student_app,
+                    student_conclusion=student_conc,
+                    model_irac=model_irac,
+                )
+                if is_paste:
+                    cmp_kwargs["student_full_text"] = student_full_text
 
                 feedback = C.run_with_time_progress(
                     compare_irac,
@@ -415,30 +412,26 @@ with tab_cmp:
                         (75, "Weighing Conclusion and overall coherence..."),
                         (90, "Assigning grade and feedback..."),
                     ],
-                    facts=facts_cmp, area=area_cmp,
-                    student_issue=student_issue, student_rule=student_rule,
-                    student_application=student_app, student_conclusion=student_conc,
-                    model_irac=model_irac,
+                    **cmp_kwargs,
                 )
                 st.divider()
                 st.markdown('<div class="section-label">Side-by-Side Comparison</div>', unsafe_allow_html=True)
                 col_s, col_ai = st.columns(2, gap="large")
                 with col_s:
                     st.markdown('<div class="section-label" style="color:#6a9bcc;">Your Draft</div>', unsafe_allow_html=True)
-                    for label, text in [
-                        ("I — Issue", student_issue), ("R — Rule", student_rule),
-                        ("A — Application", student_app), ("C — Conclusion", student_conc),
-                    ]:
-                        with st.expander(f"**{label}**", expanded=True):
-                            st.markdown(text or "*Not provided*")
-                with col_ai:
-                    ref_label = "Your Reference IRAC" if is_manual else "AI IRAC"
-                    st.markdown(f'<div class="section-label" style="color:#d97757;">{ref_label}</div>', unsafe_allow_html=True)
-                    if is_manual:
-                        with st.expander("**Reference (full text)**", expanded=True):
-                            st.markdown(ref_full_text.strip() or "*Not provided*")
+                    if is_paste:
+                        with st.expander("**Your IRAC (full text)**", expanded=True):
+                            st.markdown(student_full_text.strip() or "*Not provided*")
                     else:
-                        C.show_irreac(model_irac)
+                        for label, text in [
+                            ("I — Issue", student_issue), ("R — Rule", student_rule),
+                            ("A — Application", student_app), ("C — Conclusion", student_conc),
+                        ]:
+                            with st.expander(f"**{label}**", expanded=True):
+                                st.markdown(text or "*Not provided*")
+                with col_ai:
+                    st.markdown('<div class="section-label" style="color:#d97757;">AI IRAC</div>', unsafe_allow_html=True)
+                    C.show_irreac(model_irac)
 
                 st.divider()
                 st.markdown('<div class="section-label">Professor\'s Feedback</div>', unsafe_allow_html=True)
@@ -469,18 +462,15 @@ with tab_cmp:
                             st.markdown('<div class="feedback-col-header">What to improve</div>', unsafe_allow_html=True)
                             st.markdown(f'<div style="font-family:Lora,serif;font-size:14px;color:#e8e6dc;">{sec.gaps or "—"}</div>', unsafe_allow_html=True)
 
-                # PDF download is only meaningful for the AI-drafted reference
-                # (it expects a structured IRREAC). Skip it in whole-text mode.
-                if not is_manual:
-                    st.divider()
-                    pdf_bytes = export_to_pdf(model_irac, facts_cmp, area_cmp)
-                    st.download_button(
-                        "Download AI IRAC as PDF",
-                        data=pdf_bytes,
-                        file_name="irac_feedback.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                    )
+                st.divider()
+                pdf_bytes = export_to_pdf(model_irac, facts_cmp, area_cmp)
+                st.download_button(
+                    "Download AI IRAC as PDF",
+                    data=pdf_bytes,
+                    file_name="irac_feedback.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
 
             except Exception as e:
                 st.error(f"Something went wrong: {e}")
