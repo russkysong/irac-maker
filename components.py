@@ -1,6 +1,5 @@
 import time
 import streamlit as st
-import streamlit.components.v1 as components
 from models import IRRACOutput
 
 
@@ -171,64 +170,6 @@ def show_irreac(result: IRRACOutput, expanded: bool = True):
                 f'</div>',
                 unsafe_allow_html=True,
             )
-
-
-def render_timer(minutes: int = 90):
-    """Renders an interactive countdown timer using JavaScript."""
-    components.html(f"""
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-<div style="background:#1e1d1b; border:1px solid #2a2925; border-radius:12px; padding:20px 16px; text-align:center; font-family:'Poppins',sans-serif;">
-    <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; color:#b0aea5; margin-bottom:10px;">Bar Exam Timer</div>
-    <div id="td" style="font-size:52px; font-weight:700; color:#faf9f5; letter-spacing:0.04em; line-height:1; font-variant-numeric:tabular-nums;">{minutes:02d}:00</div>
-    <div id="tlabel" style="font-size:11px; color:#b0aea5; margin-top:6px; height:16px;"></div>
-    <div style="margin-top:16px; display:flex; gap:8px; justify-content:center;">
-        <button id="startBtn" onclick="toggle()" style="background:#d97757; color:#141413; border:none; border-radius:7px; padding:7px 20px; font-family:'Poppins',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s;">Start</button>
-        <button onclick="reset()" style="background:#2a2925; color:#faf9f5; border:1px solid #3a3830; border-radius:7px; padding:7px 16px; font-family:'Poppins',sans-serif; font-size:13px; cursor:pointer; transition:all 0.2s;">Reset</button>
-    </div>
-</div>
-<script>
-const TOTAL = {minutes * 60};
-let rem = TOTAL, iv = null, running = false;
-
-function fmt(s) {{
-    return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
-}}
-function update() {{
-    const d = document.getElementById('td');
-    const l = document.getElementById('tlabel');
-    d.textContent = rem > 0 ? fmt(rem) : 'TIME UP';
-    if (rem <= 0) {{
-        d.style.color='#ef4444'; d.style.animation='pulse 1s ease infinite';
-        l.textContent='Time is up';
-    }} else if (rem <= 300) {{
-        d.style.color='#ef4444'; d.style.animation='pulse 1s ease infinite';
-        l.textContent='Under 5 minutes!';
-    }} else if (rem <= 600) {{
-        d.style.color='#d97757'; d.style.animation='none';
-        l.textContent='10 minutes remaining';
-    }} else {{
-        d.style.color='#faf9f5'; d.style.animation='none';
-        l.textContent='';
-    }}
-}}
-function toggle() {{
-    const btn = document.getElementById('startBtn');
-    if (!running) {{
-        running=true; btn.textContent='Pause'; btn.style.background='#3a3830'; btn.style.color='#faf9f5';
-        iv = setInterval(()=>{{ if(rem>0){{rem--;update();}} else {{clearInterval(iv);running=false;}} }}, 1000);
-    }} else {{
-        running=false; clearInterval(iv); btn.textContent='Resume'; btn.style.background='#d97757'; btn.style.color='#141413';
-    }}
-}}
-function reset() {{
-    clearInterval(iv); running=false; rem=TOTAL; update();
-    const btn=document.getElementById('startBtn'); btn.textContent='Start'; btn.style.background='#d97757'; btn.style.color='#141413';
-}}
-</script>
-<style>
-@keyframes pulse {{ 0%,100%{{opacity:1}} 50%{{opacity:0.45}} }}
-</style>
-""", height=175)
 
 
 # ── Progress bar ──────────────────────────────────────────────────────────────

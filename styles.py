@@ -418,9 +418,5 @@ hr { border-color: #2a2925 !important; margin: 1.5rem 0 !important; }
     from { opacity: 0; transform: translateX(16px); }
     to { opacity: 1; transform: translateX(0); }
 }
-@keyframes timerPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
 </style>
 """, unsafe_allow_html=True)

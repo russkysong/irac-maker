@@ -13,20 +13,12 @@ st.set_page_config(page_title="IRAC Maker", page_icon="⚖️", layout="wide")
 styles.inject()
 
 # ── Header ─────────────────────────────────────────────────────────────────────
-hdr_left, hdr_right = st.columns([3, 1], gap="small")
-with hdr_left:
-    st.markdown("""
-<div class="irac-header" style="border-bottom:none; margin-bottom:0;">
+st.markdown("""
+<div class="irac-header">
     <div class="irac-logo">⚖️ IRAC<span class="irac-logo-accent"> Maker</span></div>
     <div class="irac-tagline">AI-powered legal writing practice for law school students</div>
 </div>
 """, unsafe_allow_html=True)
-with hdr_right:
-    show_timer = st.toggle("⏱️ Bar Exam Timer", value=False, key="show_timer_global")
-    if show_timer:
-        timer_min = st.slider("Minutes", 30, 180, 90, 5, key="timer_min_global", label_visibility="collapsed")
-        C.render_timer(timer_min)
-st.markdown("<hr style='border-color:#2a2925;margin:0.5rem 0 1.25rem 0;'>", unsafe_allow_html=True)
 
 @st.cache_resource(show_spinner=False)
 def _model_ready_cached() -> bool:
