@@ -4,7 +4,7 @@ import styles
 import components as C
 from irac_engine import (
     compare_irac,
-    socratic_next_question, check_model_ready, AREAS_OF_LAW,
+    socratic_next_question, check_model_ready,
 )
 from export import export_to_pdf
 

@@ -62,53 +62,78 @@ footer { display: none; }
 
 /* ── Tabs ─────────────────────────────────────────────────────── */
 .stTabs [data-baseweb="tab-list"] {
-    background-color: #1e1d1b !important;
-    border-radius: 10px !important;
-    padding: 4px !important;
+    background-color: #1a1a18 !important;
+    border-radius: 12px !important;
+    padding: 5px !important;
     gap: 2px !important;
     border: 1px solid #2a2925 !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02) !important;
 }
 .stTabs [data-baseweb="tab"] {
     background-color: transparent !important;
-    border-radius: 7px !important;
+    border-radius: 8px !important;
     color: #b0aea5 !important;
     font-family: 'Poppins', sans-serif !important;
     font-size: 13px !important;
     font-weight: 500 !important;
-    padding: 8px 18px !important;
-    transition: all 0.2s ease !important;
+    padding: 9px 20px !important;
+    transition: background 0.18s ease, color 0.18s ease !important;
     border: none !important;
 }
-.stTabs [data-baseweb="tab"]:hover { color: #faf9f5 !important; }
+.stTabs [data-baseweb="tab"]:hover {
+    color: #faf9f5 !important;
+    background-color: rgba(255,255,255,0.03) !important;
+}
 .stTabs [aria-selected="true"] {
     background-color: #d97757 !important;
     color: #141413 !important;
     font-weight: 600 !important;
+    box-shadow: 0 2px 8px rgba(217,119,87,0.25) !important;
 }
+.stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+.stTabs [data-baseweb="tab-border"] { display: none !important; }
 
 /* ── Buttons ──────────────────────────────────────────────────── */
 .stButton > button {
     font-family: 'Poppins', sans-serif !important;
     font-weight: 500 !important;
-    border-radius: 8px !important;
-    transition: all 0.2s ease !important;
+    border-radius: 9px !important;
+    transition: background 0.18s ease, border-color 0.18s ease,
+                color 0.18s ease, transform 0.15s ease,
+                box-shadow 0.18s ease !important;
     border: 1px solid #3a3830 !important;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.15) !important;
 }
 .stButton > button[kind="primary"] {
-    background: #d97757 !important;
+    background: linear-gradient(180deg, #d97757 0%, #c96841 100%) !important;
     color: #141413 !important;
     border: none !important;
     font-weight: 600 !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset,
+                0 4px 12px rgba(217,119,87,0.25) !important;
 }
 .stButton > button[kind="primary"]:hover {
-    background: #c4633f !important;
+    background: linear-gradient(180deg, #e3835f 0%, #c4633f 100%) !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 4px 16px rgba(217, 119, 87, 0.35) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset,
+                0 6px 18px rgba(217,119,87,0.4) !important;
+}
+.stButton > button[kind="primary"]:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.15) inset,
+                0 2px 6px rgba(217,119,87,0.25) !important;
 }
 .stButton > button:not([kind="primary"]):hover {
     border-color: #d97757 !important;
     color: #d97757 !important;
-    transform: translateY(-1px) !important;
+    background-color: rgba(217,119,87,0.04) !important;
+}
+.stButton > button:not([kind="primary"]):active {
+    transform: translateY(0) !important;
+}
+.stButton > button:focus-visible {
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(217,119,87,0.4) !important;
 }
 
 /* ── Text areas ───────────────────────────────────────────────── */
@@ -136,23 +161,69 @@ footer { display: none; }
     color: #b0aea5 !important;
 }
 
-/* ── Popover (used for Area-of-Law chip) ──────────────────────── */
-[data-testid="stPopover"] button {
-    background-color: #1e1d1b !important;
-    border: 1px solid #3a3830 !important;
+/* ── Area-of-Law chip button ──────────────────────────────────── */
+/* Streamlit emits each st.button inside [data-testid="stElementContainer"]
+   with a button[aria-label] matching the visible text. We target the chip
+   via the leading "⚖️ Area of Law:" text fragment using a CSS :has() rule. */
+.stButton:has(button[aria-label^="⚖️ Area of Law"]) {
+    margin-bottom: 8px !important;
+}
+.stButton > button[aria-label^="⚖️ Area of Law"] {
+    background-color: #1a1a18 !important;
+    border: 1px solid #2a2925 !important;
     color: #b0aea5 !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    padding: 7px 14px !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    width: auto !important;
+    min-height: 0 !important;
+}
+.stButton > button[aria-label^="⚖️ Area of Law"]:hover {
+    border-color: #d97757 !important;
+    color: #faf9f5 !important;
+    background-color: rgba(217,119,87,0.06) !important;
+    transform: none !important;
+}
+
+/* ── Pills (area picker, mode toggles) ────────────────────────── */
+[data-testid="stPills"] [role="radiogroup"] {
+    gap: 6px !important;
+}
+[data-testid="stPills"] button {
+    background-color: #1e1d1b !important;
+    border: 1px solid #2a2925 !important;
+    color: #b0aea5 !important;
+    border-radius: 999px !important;
+    padding: 6px 14px !important;
     font-family: 'Poppins', sans-serif !important;
     font-size: 12px !important;
     font-weight: 500 !important;
-    padding: 6px 14px !important;
-    border-radius: 999px !important;
-    transition: border-color 0.2s, color 0.2s !important;
-    width: auto !important;
+    transition: all 0.18s ease !important;
 }
-[data-testid="stPopover"] button:hover {
+[data-testid="stPills"] button:hover {
     border-color: #d97757 !important;
     color: #faf9f5 !important;
-    transform: none !important;
+}
+[data-testid="stPills"] button[aria-checked="true"] {
+    background-color: rgba(217,119,87,0.15) !important;
+    border-color: #d97757 !important;
+    color: #faf9f5 !important;
+    font-weight: 600 !important;
+}
+
+/* ── Radio (mode selector) ────────────────────────────────────── */
+[data-testid="stRadio"] > div {
+    gap: 16px !important;
+}
+[data-testid="stRadio"] label {
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 13px !important;
+    color: #b0aea5 !important;
+}
+[data-testid="stRadio"] label:hover {
+    color: #faf9f5 !important;
 }
 
 /* ── Selectbox ────────────────────────────────────────────────── */
@@ -178,20 +249,38 @@ footer { display: none; }
 
 /* ── Expanders ────────────────────────────────────────────────── */
 .stExpander {
-    background-color: #1e1d1b !important;
+    background-color: #1c1b19 !important;
     border: 1px solid #2a2925 !important;
-    border-radius: 10px !important;
+    border-radius: 11px !important;
     margin-bottom: 8px !important;
     overflow: hidden !important;
     animation: fadeInUp 0.35s ease !important;
-    transition: border-color 0.2s !important;
+    transition: border-color 0.18s, background-color 0.18s !important;
 }
-.stExpander:hover { border-color: #3a3830 !important; }
+.stExpander:hover {
+    border-color: #3a3830 !important;
+    background-color: #1f1e1c !important;
+}
 .stExpander summary {
     font-family: 'Poppins', sans-serif !important;
     font-weight: 600 !important;
     color: #faf9f5 !important;
-    padding: 14px 16px !important;
+    padding: 13px 16px !important;
+}
+
+/* ── Dialog (modal) ───────────────────────────────────────────── */
+[data-testid="stDialog"] > div:first-child {
+    background-color: #1c1b19 !important;
+    border: 1px solid #2a2925 !important;
+    border-radius: 14px !important;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5) !important;
+}
+[data-testid="stDialog"] h2,
+[data-testid="stDialog"] h3 {
+    font-family: 'Poppins', sans-serif !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
 }
 
 /* ── Alerts / info boxes ──────────────────────────────────────── */
