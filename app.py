@@ -107,20 +107,6 @@ with tab_gen:
             timer_min = st.slider("Minutes", 30, 180, 90, 5)
             C.render_timer(timer_min)
 
-        st.markdown('<div class="section-label" style="margin-top:1rem;">How IRAC Works</div>', unsafe_allow_html=True)
-        st.markdown("""
-**IRAC** is the standard legal reasoning framework used in American law schools and on the bar exam.
-
-| Step | What it covers |
-|---|---|
-| **I — Issue** | The precise legal question the court must answer |
-| **R — Rule** | The applicable rule with citation — statute, restatement section, or landmark case |
-| **A — Application** | Each rule element applied to the specific facts — **this is where exam points are won or lost** |
-| **C — Conclusion** | A direct answer to the Issue, with a confidence level |
-
-**Note:** The AI breaks the Rule into two parts — what the rule says, and how courts have interpreted it. This gives you richer Rule analysis than a basic IRAC outline.
-""")
-
     with col_right:
         st.markdown('<div class="section-label">Analysis</div>', unsafe_allow_html=True)
 
@@ -169,6 +155,22 @@ with tab_gen:
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+    # ── "How IRAC Works" — full-width, below both columns ─────────────────────
+    st.divider()
+    st.markdown('<div class="section-label">How IRAC Works</div>', unsafe_allow_html=True)
+    st.markdown("""
+**IRAC** is the standard legal reasoning framework used in American law schools and on the bar exam.
+
+| Step | What it covers |
+|---|---|
+| **I — Issue** | The precise legal question the court must answer |
+| **R — Rule** | The applicable rule with citation — statute, restatement section, or landmark case |
+| **A — Application** | Each rule element applied to the specific facts — **this is where exam points are won or lost** |
+| **C — Conclusion** | A direct answer to the Issue, with a confidence level |
+
+**Note:** The AI breaks the Rule into two parts — what the rule says, and how courts have interpreted it. This gives you richer Rule analysis than a basic IRAC outline.
+""")
 
 
 # ════════════════════════════════════════════════════════════════════════════════
