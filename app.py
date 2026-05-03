@@ -1,10 +1,13 @@
 import html
+from datetime import datetime, timezone
+
 import streamlit as st
 import styles
 import components as C
+import outlines
 from irac_engine import (
     compare_irac,
-    socratic_next_question, check_model_ready,
+    socratic_next_question, check_model_ready, AREAS_OF_LAW,
 )
 from export import export_to_pdf
 
@@ -39,9 +42,9 @@ for k, v in DEFAULTS.items():
         st.session_state[k] = v
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_gen, tab_brief, tab_both, tab_cmp, tab_soc, tab_about = st.tabs([
+tab_gen, tab_brief, tab_both, tab_cmp, tab_soc, tab_outlines, tab_about = st.tabs([
     "Generate IRAC", "Case Brief", "Both Sides", "Compare & Feedback",
-    "Socratic Mode", "About",
+    "Socratic Mode", "My Outlines", "About",
 ])
 
 
@@ -623,7 +626,128 @@ with tab_soc:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 6 — ABOUT
+# TAB 6 — MY OUTLINES
+# ════════════════════════════════════════════════════════════════════════════════
+def _humanize_age(iso_ts: str) -> str:
+    """Render '2 days ago' / 'just now' from an ISO timestamp."""
+    try:
+        ts = datetime.fromisoformat(iso_ts.rstrip("Z")).replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - ts
+    except Exception:
+        return iso_ts
+    secs = int(delta.total_seconds())
+    if secs < 60: return "just now"
+    if secs < 3600: return f"{secs // 60} min ago"
+    if secs < 86400: return f"{secs // 3600} hr ago"
+    days = secs // 86400
+    return f"{days} day{'s' if days != 1 else ''} ago"
+
+
+with tab_outlines:
+    # ── Privacy notice ─────────────────────────────────────────────────────────
+    st.markdown("""
+<div class="irac-card irac-card-blue" style="margin-bottom:1.5rem;">
+    <div class="section-label" style="color:#6a9bcc;">Local-only · Private</div>
+    <p style="margin:0;font-size:14px;color:#b0aea5;line-height:1.7;">
+        Files stay on this computer. They are <strong>never</strong> uploaded,
+        sent to a server, or committed to git. You are responsible for
+        ensuring you have rights to any outline you upload — typically a
+        commercial study guide you've purchased is fine for personal use.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    # ── Upload form ────────────────────────────────────────────────────────────
+    st.markdown('<div class="section-label">Upload an Outline</div>', unsafe_allow_html=True)
+    upload_area = st.pills(
+        "Area of Law", AREAS_OF_LAW,
+        default="Contracts", key="outline_upload_area",
+    ) or "Contracts"
+    uploaded_file = st.file_uploader(
+        "Outline file",
+        type=["pdf", "docx", "txt", "md"],
+        key="outline_upload_file",
+        help="PDF, DOCX, TXT, or Markdown. Scanned PDFs without an OCR text layer won't work.",
+    )
+    if st.button("Add to my outlines", type="primary",
+                 use_container_width=True, disabled=uploaded_file is None):
+        try:
+            meta = outlines.add_outline(
+                filename=uploaded_file.name,
+                area=upload_area,
+                content=uploaded_file.getvalue(),
+            )
+            st.success(f"Saved **{meta['filename']}** ({meta['char_count']:,} chars).")
+            st.rerun()
+        except ImportError:
+            st.error(
+                "PDF and DOCX support requires extra packages. Run:\n\n"
+                "```bash\nbash setup.sh\n```\n\nor\n\n"
+                "```bash\npip install pypdf python-docx\n```"
+            )
+        except ValueError as e:
+            st.warning(str(e))
+        except Exception as e:
+            st.error(f"Upload failed: {e}")
+
+    st.divider()
+
+    # ── Auto-inject toggle ─────────────────────────────────────────────────────
+    st.toggle(
+        "Use my outlines when generating IRACs",
+        value=st.session_state.get("inject_outlines", True),
+        key="inject_outlines",
+        help=(
+            "When on, the IRAC generator looks for outlines tagged with the "
+            "current area of law and adds short matching excerpts as context."
+        ),
+    )
+
+    st.divider()
+
+    # ── Existing outlines list ─────────────────────────────────────────────────
+    st.markdown('<div class="section-label">My Outlines</div>', unsafe_allow_html=True)
+    items = outlines.load_index()
+
+    if not items:
+        st.markdown("""
+<div class="irac-card" style="text-align:center;padding:2.5rem 1.5rem;border-style:dashed;">
+    <div style="font-size:1.6rem;margin-bottom:0.6rem;">📚</div>
+    <div style="font-family:Poppins,sans-serif;font-size:13px;color:#b0aea5;">
+        No outlines yet. Upload one above to get started.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+    else:
+        for item in items:
+            col_info, col_del = st.columns([5, 1])
+            with col_info:
+                age = _humanize_age(item.get("uploaded_at", ""))
+                area_chip = (
+                    f'<span style="display:inline-block;background:rgba(217,119,87,0.12);'
+                    f'border:1px solid rgba(217,119,87,0.3);color:#d97757;'
+                    f'font-family:Poppins,sans-serif;font-size:10px;font-weight:600;'
+                    f'letter-spacing:0.06em;text-transform:uppercase;'
+                    f'padding:2px 9px;border-radius:999px;margin-left:8px;">{html.escape(item.get("area",""))}</span>'
+                )
+                st.markdown(
+                    f'<div class="irac-card" style="padding:12px 16px;margin-bottom:6px;">'
+                    f'<div style="font-family:Poppins,sans-serif;font-size:14px;font-weight:600;color:#faf9f5;">'
+                    f'{html.escape(item.get("filename","(unnamed)"))}{area_chip}'
+                    f'</div>'
+                    f'<div style="font-family:Lora,serif;font-size:12px;color:#b0aea5;margin-top:4px;">'
+                    f'{item.get("char_count", 0):,} chars · uploaded {age}'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+            with col_del:
+                if st.button("Delete", key=f"del_{item['id']}", use_container_width=True):
+                    outlines.delete_outline(item["id"])
+                    st.rerun()
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# TAB 7 — ABOUT
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_about:
     # ── Modes (single-column stack) ────────────────────────────────────────────
@@ -658,6 +782,12 @@ with tab_about:
         <div class="section-label" style="color:#b0aea5;">Socratic Mode</div>
         <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
             A professor asks you one question at a time to help you spot the legal issues yourself — no answers given upfront.
+        </div>
+    </div>
+    <div class="irac-card irac-card-accent" style="padding:16px 18px;">
+        <div class="section-label">My Outlines</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Upload your own legally-purchased outlines (PDF, DOCX, TXT). They stay on this computer and get used as context when generating IRACs in matching areas of law — so the AI's analysis sounds like your outline, not a generic restatement.
         </div>
     </div>
 </div>

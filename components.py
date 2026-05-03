@@ -301,7 +301,8 @@ def stream_with_progress(facts: str, area: str,
     current_sublabel = "Reading the facts..."
     last_section_pct = start_pct  # tracks last pct set by a section marker
 
-    for event, data in stream_irreac(facts, area):
+    inject = bool(st.session_state.get("inject_outlines", True))
+    for event, data in stream_irreac(facts, area, inject_outlines=inject):
         if event == "status":
             step_pct, sublabel = _PROGRESS_STEPS.get(data, (start_pct + 10, ""))
             new_pct = start_pct + int((step_pct / 100) * (end_pct - start_pct))

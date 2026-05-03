@@ -42,6 +42,27 @@ Facts:
 
 JSON response:"""
 
+# Variant used when the user has uploaded outlines and the auto-inject toggle
+# is on — see outlines.relevant_excerpts(). Excerpts are paraphrase-source,
+# never to be quoted verbatim.
+GENERATE_PROMPT_WITH_OUTLINE = """Analyze this American law school hypo using IRREAC.
+Respond ONLY with valid JSON. No text before or after the JSON.
+
+The following excerpts are from the student's own legally-owned outline.
+Use them to inform the rule citations, terminology, and analysis emphasis.
+Do NOT copy verbatim — paraphrase. Treat this as background context.
+
+--- STUDENT'S OUTLINE EXCERPTS ---
+{excerpts}
+---
+
+Area of Law: {area}
+
+Facts:
+{facts}
+
+JSON response:"""
+
 PLAINTIFF_PROMPT = """You are arguing the PLAINTIFF'S strongest possible IRREAC.
 Build the most favorable interpretation of the facts for the plaintiff.
 Respond ONLY with valid JSON.
@@ -230,8 +251,28 @@ def _chat(system: str | None, user: str, use_json: bool = True) -> dict:
     return ollama.chat(**kwargs)
 
 
-def generate_irreac(facts: str, area: str = "Contracts") -> IRRACOutput:
-    prompt = GENERATE_PROMPT.format(area=area, facts=facts.strip())
+def _build_generate_prompt(facts: str, area: str, inject_outlines: bool) -> str:
+    """Pick GENERATE_PROMPT or its outline-augmented variant.
+
+    Imports outlines lazily so this module never hard-depends on it — keeps
+    irac_engine.py importable in unit-test contexts without the storage layer.
+    """
+    if inject_outlines:
+        try:
+            import outlines as _outlines
+            extras = _outlines.relevant_excerpts(facts, area)
+        except Exception:
+            extras = ""
+        if extras:
+            return GENERATE_PROMPT_WITH_OUTLINE.format(
+                area=area, facts=facts.strip(), excerpts=extras,
+            )
+    return GENERATE_PROMPT.format(area=area, facts=facts.strip())
+
+
+def generate_irreac(facts: str, area: str = "Contracts",
+                    inject_outlines: bool = True) -> IRRACOutput:
+    prompt = _build_generate_prompt(facts, area, inject_outlines)
     resp = ollama.chat(
         model=MODEL_NAME,
         messages=[{"role": "user", "content": prompt}],
@@ -254,15 +295,20 @@ _SECTION_LABELS = {
 }
 
 
-def stream_irreac(facts: str, area: str = "Contracts"):
+def stream_irreac(facts: str, area: str = "Contracts",
+                  inject_outlines: bool = True):
     """
     Yields progress events while streaming the IRAC generation.
     Event types:
       ("status", label)   — a new IRAC section has started
       ("token",  text)    — raw token (for optional live display)
       ("done",   IRRACOutput) — generation complete, parsed result
+
+    inject_outlines: if True, look up the user's uploaded outlines for `area`
+    and prepend matching excerpts to the prompt. Off-by-default in callers
+    that shouldn't be touched by user data (e.g. plaintiff/defendant generation).
     """
-    prompt = GENERATE_PROMPT.format(area=area, facts=facts.strip())
+    prompt = _build_generate_prompt(facts, area, inject_outlines)
     # NOTE: format="json" + stream=True buffers the entire response before yielding
     # any tokens, defeating streaming. We omit format here and parse JSON manually.
     stream = ollama.chat(
@@ -311,7 +357,9 @@ def stream_irreac(facts: str, area: str = "Contracts"):
         except Exception:
             # Last resort: deterministic re-call with format=json. Still slow
             # but at least guaranteed-valid output rather than a third failure.
-            result = generate_irreac(facts, area)
+            # Pass `inject_outlines` through so the fallback uses the same
+            # context the original streaming attempt did.
+            result = generate_irreac(facts, area, inject_outlines)
     yield ("done", result)
 
 
