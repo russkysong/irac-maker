@@ -51,14 +51,11 @@ with tab_gen:
     col_left, col_right = st.columns([1, 1], gap="large")
 
     with col_left:
-        # Area of Law is hidden behind a popover — pick once, it stays selected.
-        _area = st.session_state.get("area_gen") or "Contracts"
-        with st.popover(f"⚖️ Area of Law: {_area}", use_container_width=False):
-            area_gen = st.pills(
-                "Area of Law", AREAS_OF_LAW,
-                default=_area, key="area_gen",
-                label_visibility="collapsed",
-            ) or _area
+        # Area of Law is hidden behind a modal — picking a pill closes it instantly.
+        _area = st.session_state.get("area_gen_value") or "Contracts"
+        if st.button(f"⚖️ Area of Law: {_area}", key="btn_area_gen"):
+            C.pick_area_dialog("area_gen_value")
+        area_gen = _area
         facts_gen = st.text_area(
             "Facts", height=260, key="facts_gen",
             placeholder=(
@@ -163,13 +160,10 @@ with tab_both:
 </div>
 """, unsafe_allow_html=True)
 
-    _area_bs = st.session_state.get("area_bs") or "Contracts"
-    with st.popover(f"⚖️ Area of Law: {_area_bs}", use_container_width=False):
-        area_bs = st.pills(
-            "Area of Law", AREAS_OF_LAW,
-            default=_area_bs, key="area_bs",
-            label_visibility="collapsed",
-        ) or _area_bs
+    _area_bs = st.session_state.get("area_bs_value") or "Contracts"
+    if st.button(f"⚖️ Area of Law: {_area_bs}", key="btn_area_bs"):
+        C.pick_area_dialog("area_bs_value")
+    area_bs = _area_bs
     col_bs, col_empty = st.columns([1, 2])
     with col_bs:
         facts_bs = st.text_area("Facts", height=180, key="facts_bs",
@@ -239,13 +233,10 @@ with tab_cmp:
     )
     is_paste = cmp_mode == "Paste my whole IRAC as one block"
 
-    _area_cmp = st.session_state.get("area_cmp") or st.session_state.last_area
-    with st.popover(f"⚖️ Area of Law: {_area_cmp}", use_container_width=False):
-        area_cmp = st.pills(
-            "Area of Law", AREAS_OF_LAW,
-            default=_area_cmp, key="area_cmp",
-            label_visibility="collapsed",
-        ) or _area_cmp
+    _area_cmp = st.session_state.get("area_cmp_value") or st.session_state.last_area
+    if st.button(f"⚖️ Area of Law: {_area_cmp}", key="btn_area_cmp"):
+        C.pick_area_dialog("area_cmp_value")
+    area_cmp = _area_cmp
     facts_cmp = st.text_area(
         "Facts", height=110, key="facts_cmp",
         value=st.session_state.last_facts,
@@ -470,13 +461,10 @@ with tab_soc:
 """, unsafe_allow_html=True)
 
     if not st.session_state.socratic_started:
-        _area_soc = st.session_state.get("soc_area_input") or "Contracts"
-        with st.popover(f"⚖️ Area of Law: {_area_soc}", use_container_width=False):
-            soc_area = st.pills(
-                "Area of Law", AREAS_OF_LAW,
-                default=_area_soc, key="soc_area_input",
-                label_visibility="collapsed",
-            ) or _area_soc
+        _area_soc = st.session_state.get("soc_area_value") or "Contracts"
+        if st.button(f"⚖️ Area of Law: {_area_soc}", key="btn_area_soc"):
+            C.pick_area_dialog("soc_area_value")
+        soc_area = _area_soc
         col_soc_f, col_soc_btn = st.columns([3, 1])
         with col_soc_f:
             soc_facts = st.text_area("Facts", height=160, key="soc_facts_input",

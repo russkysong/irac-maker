@@ -3,6 +3,30 @@ import streamlit as st
 import streamlit.components.v1 as components
 from models import IRRACOutput
 
+
+# ── Area-of-Law modal picker ──────────────────────────────────────────────────
+@st.dialog("Pick Area of Law")
+def pick_area_dialog(state_key: str, default: str = "Contracts"):
+    """Modal picker that auto-closes the moment a pill is selected.
+
+    The dialog widget needs its own widget key (separate from `state_key`)
+    because Streamlit doesn't allow modifying a widget's session_state value
+    during the same run that the widget is created. We mirror the pick into
+    `state_key` and call st.rerun() — that closes the dialog AND lets the
+    parent page read the new value from session_state on the next render.
+    """
+    from irac_engine import AREAS_OF_LAW
+    current = st.session_state.get(state_key) or default
+    selected = st.pills(
+        "Area of Law", AREAS_OF_LAW,
+        default=current,
+        key=f"_dialog_pills_{state_key}",
+        label_visibility="collapsed",
+    )
+    if selected and selected != current:
+        st.session_state[state_key] = selected
+        st.rerun()
+
 # ── Word count targets per IRAC section ───────────────────────────────────────
 WORD_TARGETS = {
     "issue":       (30,  80,  "1–2 sentences"),
