@@ -18,33 +18,6 @@ st.markdown("""
     <div class="irac-logo">⚖️ IRAC<span class="irac-logo-accent"> Maker</span></div>
     <div class="irac-tagline">AI-powered legal writing practice for law school students</div>
 </div>
-
-<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:1.5rem;">
-    <div class="irac-card" style="padding:14px 16px;">
-        <div class="section-label">Generate IRAC</div>
-        <div style="font-family:Lora,serif;font-size:13px;color:#b0aea5;line-height:1.5;">
-            Paste a fact pattern — AI drafts a full structured IRAC analysis with citations and element-by-element application.
-        </div>
-    </div>
-    <div class="irac-card irac-card-blue" style="padding:14px 16px;">
-        <div class="section-label" style="color:#6a9bcc;">Both Sides</div>
-        <div style="font-family:Lora,serif;font-size:13px;color:#b0aea5;line-height:1.5;">
-            Generates the plaintiff's strongest argument and the defendant's strongest argument side by side.
-        </div>
-    </div>
-    <div class="irac-card irac-card-green" style="padding:14px 16px;">
-        <div class="section-label" style="color:#788c5d;">Compare & Feedback</div>
-        <div style="font-family:Lora,serif;font-size:13px;color:#b0aea5;line-height:1.5;">
-            Write your own IRAC first, then get it graded section-by-section against the AI's model answer.
-        </div>
-    </div>
-    <div class="irac-card" style="padding:14px 16px;border-left:3px solid #b0aea5;">
-        <div class="section-label" style="color:#b0aea5;">Socratic Mode</div>
-        <div style="font-family:Lora,serif;font-size:13px;color:#b0aea5;line-height:1.5;">
-            A professor asks you one question at a time to help you spot the legal issues yourself — no answers given upfront.
-        </div>
-    </div>
-</div>
 """, unsafe_allow_html=True)
 
 @st.cache_resource(show_spinner=False)
@@ -66,8 +39,8 @@ for k, v in DEFAULTS.items():
         st.session_state[k] = v
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_gen, tab_both, tab_cmp, tab_soc = st.tabs([
-    "Generate IRAC", "Both Sides", "Compare & Feedback", "Socratic Mode",
+tab_gen, tab_both, tab_cmp, tab_soc, tab_about = st.tabs([
+    "Generate IRAC", "Both Sides", "Compare & Feedback", "Socratic Mode", "About",
 ])
 
 
@@ -285,7 +258,6 @@ with tab_cmp:
         # session_state key directly, BEFORE the widget is constructed, then rerun.
         col_i, col_r = st.columns(2)
         with col_i:
-            C.section_tip("issue")
             col_i_hdr, col_i_btn = st.columns([3, 1])
             with col_i_hdr:
                 st.markdown("**I — Issue**")
@@ -300,7 +272,6 @@ with tab_cmp:
             C.word_count_bar(student_issue, "issue")
 
         with col_r:
-            C.section_tip("rule")
             col_r_hdr, col_r_btn = st.columns([3, 1])
             with col_r_hdr:
                 st.markdown("**R — Rule**")
@@ -316,7 +287,6 @@ with tab_cmp:
 
         col_a, col_c = st.columns(2)
         with col_a:
-            C.section_tip("application")
             col_a_hdr, col_a_btn = st.columns([3, 1])
             with col_a_hdr:
                 st.markdown("**A — Application**")
@@ -331,7 +301,6 @@ with tab_cmp:
             C.word_count_bar(student_app, "application")
 
         with col_c:
-            C.section_tip("conclusion")
             col_c_hdr, col_c_btn = st.columns([3, 1])
             with col_c_hdr:
                 st.markdown("**C — Conclusion**")
@@ -603,3 +572,55 @@ with tab_soc:
                 )
                 st.session_state.socratic_history.append({"role": "assistant", "content": next_q})
                 st.rerun()
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# TAB 5 — ABOUT
+# ════════════════════════════════════════════════════════════════════════════════
+with tab_about:
+    # ── Modes ──────────────────────────────────────────────────────────────────
+    st.markdown('<div class="section-label">Modes</div>', unsafe_allow_html=True)
+    st.markdown("""
+<div style="display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:1.5rem;">
+    <div class="irac-card" style="padding:16px 18px;">
+        <div class="section-label">Generate IRAC</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Paste a fact pattern — AI drafts a full structured IRAC analysis with citations and element-by-element application.
+        </div>
+    </div>
+    <div class="irac-card irac-card-blue" style="padding:16px 18px;">
+        <div class="section-label" style="color:#6a9bcc;">Both Sides</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Generates the plaintiff's strongest argument and the defendant's strongest argument side by side.
+        </div>
+    </div>
+    <div class="irac-card irac-card-green" style="padding:16px 18px;">
+        <div class="section-label" style="color:#788c5d;">Compare & Feedback</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Write your own IRAC first, then get it graded section-by-section against the AI's model answer.
+        </div>
+    </div>
+    <div class="irac-card" style="padding:16px 18px;border-left:3px solid #b0aea5;">
+        <div class="section-label" style="color:#b0aea5;">Socratic Mode</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            A professor asks you one question at a time to help you spot the legal issues yourself — no answers given upfront.
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+    # ── Writing Tips ───────────────────────────────────────────────────────────
+    st.markdown('<div class="section-label" style="margin-top:1rem;">Writing Tips</div>', unsafe_allow_html=True)
+    st.caption("Quick reminders for each section of the IRAC, used when grading your draft in Compare & Feedback.")
+
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        st.markdown("**I — Issue**")
+        C.section_tip("issue")
+        st.markdown("**A — Application**")
+        C.section_tip("application")
+    with col_t2:
+        st.markdown("**R — Rule**")
+        C.section_tip("rule")
+        st.markdown("**C — Conclusion**")
+        C.section_tip("conclusion")
