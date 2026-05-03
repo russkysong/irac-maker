@@ -337,42 +337,30 @@ with tab_cmp:
         )
         C.word_count_bar(student_conc, "conclusion")
 
-    # ── Reference IRAC inputs (only when manual mode) ──────────────────────────
-    ref_issue = ref_rule = ref_app = ref_conc = ""
+    # ── Reference IRAC input (only when manual mode) ──────────────────────────
+    ref_full_text = ""
     if is_manual:
         st.divider()
-        st.markdown('<div class="section-label">Reference IRAC</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">Reference IRAC (whole)</div>', unsafe_allow_html=True)
         st.caption(
-            "Paste the IRAC you want to compare against — e.g. a textbook model answer, "
-            "your professor's answer key, or a classmate's draft."
+            "Paste the whole IRAC you want to compare against — one block of text. "
+            "Section labels (Issue:, Rule:, Application:, Conclusion: or I:, R:, A:, C:) help, "
+            "but aren't required."
         )
-        col_ri, col_rr = st.columns(2)
-        with col_ri:
-            st.markdown("**I — Issue**")
-            ref_issue = st.text_area(
-                "Reference Issue", height=110, label_visibility="collapsed", key="r_issue",
-                placeholder="Whether ... given ...",
-            )
-        with col_rr:
-            st.markdown("**R — Rule**")
-            ref_rule = st.text_area(
-                "Reference Rule", height=110, label_visibility="collapsed", key="r_rule",
-                placeholder="Under [statute/case], the rule requires...",
-            )
-
-        col_ra, col_rc = st.columns(2)
-        with col_ra:
-            st.markdown("**A — Application**")
-            ref_app = st.text_area(
-                "Reference Application", height=200, label_visibility="collapsed", key="r_app",
-                placeholder="Element 1: ...\nElement 2: ...",
-            )
-        with col_rc:
-            st.markdown("**C — Conclusion**")
-            ref_conc = st.text_area(
-                "Reference Conclusion", height=200, label_visibility="collapsed", key="r_conc",
-                placeholder="Therefore, ...",
-            )
+        ref_full_text = st.text_area(
+            "Reference IRAC",
+            height=320,
+            label_visibility="collapsed",
+            key="r_full",
+            placeholder=(
+                "Paste a textbook model answer, your professor's answer key, or any "
+                "complete IRAC here as one block.\n\n"
+                "Issue: ...\n"
+                "Rule: ...\n"
+                "Application: ...\n"
+                "Conclusion: ..."
+            ),
+        )
 
     btn_label = (
         "Compare with My Reference + Get Feedback"
@@ -386,20 +374,21 @@ with tab_cmp:
             st.warning("Paste facts first.")
         elif not any([student_issue.strip(), student_rule.strip(), student_app.strip(), student_conc.strip()]):
             st.warning("Write at least one section of your draft before comparing.")
-        elif is_manual and not any([ref_issue.strip(), ref_rule.strip(), ref_app.strip(), ref_conc.strip()]):
-            st.warning("Provide at least one section of your reference IRAC before comparing.")
+        elif is_manual and not ref_full_text.strip():
+            st.warning("Paste your reference IRAC before comparing.")
         else:
             try:
                 if is_manual:
-                    # Build IRRACOutput from user-provided reference. We store the full
-                    # rule in rule_statement and leave rule_exploration blank — show_irreac
-                    # collapses these into a single "R — Rule" section when R2 is empty.
+                    # Whole-text reference: stash the full paste in `application` so
+                    # the existing IRRACOutput model can carry it. compare_irac
+                    # detects an empty rule_statement+issue+conclusion and switches
+                    # to whole-text grading mode.
                     model_irac = IRRACOutput(
-                        issue=ref_issue.strip() or "(not provided)",
-                        rule_statement=ref_rule.strip() or "(not provided)",
+                        issue="",
+                        rule_statement="",
                         rule_exploration="",
-                        application=ref_app.strip() or "(not provided)",
-                        conclusion=ref_conc.strip() or "(not provided)",
+                        application=ref_full_text.strip(),
+                        conclusion="",
                         tips=[],
                     )
                 else:
@@ -439,9 +428,13 @@ with tab_cmp:
                         with st.expander(f"**{label}**", expanded=True):
                             st.markdown(text or "*Not provided*")
                 with col_ai:
-                    ref_label = "Your Reference" if is_manual else "AI IRAC"
+                    ref_label = "Your Reference IRAC" if is_manual else "AI IRAC"
                     st.markdown(f'<div class="section-label" style="color:#d97757;">{ref_label}</div>', unsafe_allow_html=True)
-                    C.show_irreac(model_irac)
+                    if is_manual:
+                        with st.expander("**Reference (full text)**", expanded=True):
+                            st.markdown(ref_full_text.strip() or "*Not provided*")
+                    else:
+                        C.show_irreac(model_irac)
 
                 st.divider()
                 st.markdown('<div class="section-label">Professor\'s Feedback</div>', unsafe_allow_html=True)
@@ -472,16 +465,18 @@ with tab_cmp:
                             st.markdown('<div class="feedback-col-header">What to improve</div>', unsafe_allow_html=True)
                             st.markdown(f'<div style="font-family:Lora,serif;font-size:14px;color:#e8e6dc;">{sec.gaps or "—"}</div>', unsafe_allow_html=True)
 
-                st.divider()
-                pdf_bytes = export_to_pdf(model_irac, facts_cmp, area_cmp)
-                pdf_label = "Download Reference IRAC as PDF" if is_manual else "Download AI IRAC as PDF"
-                st.download_button(
-                    pdf_label,
-                    data=pdf_bytes,
-                    file_name="irac_feedback.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
+                # PDF download is only meaningful for the AI-drafted reference
+                # (it expects a structured IRREAC). Skip it in whole-text mode.
+                if not is_manual:
+                    st.divider()
+                    pdf_bytes = export_to_pdf(model_irac, facts_cmp, area_cmp)
+                    st.download_button(
+                        "Download AI IRAC as PDF",
+                        data=pdf_bytes,
+                        file_name="irac_feedback.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                    )
 
             except Exception as e:
                 st.error(f"Something went wrong: {e}")
