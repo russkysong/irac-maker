@@ -6,13 +6,17 @@ from models import IRRACOutput
 # ── Area-of-Law modal picker ──────────────────────────────────────────────────
 @st.dialog("Pick Area of Law")
 def pick_area_dialog(state_key: str, default: str = "Contracts"):
-    """Modal picker that auto-closes the moment a pill is selected.
+    """Modal picker. Auto-closes when the user picks a *different* pill.
 
-    The dialog widget needs its own widget key (separate from `state_key`)
-    because Streamlit doesn't allow modifying a widget's session_state value
-    during the same run that the widget is created. We mirror the pick into
-    `state_key` and call st.rerun() — that closes the dialog AND lets the
-    parent page read the new value from session_state on the next render.
+    The auto-close-on-change branch keeps the snappy UX from before. The
+    explicit "Use this area" button below handles the edge case where the
+    user is happy with the currently-selected pill (important for the
+    first-run welcome gate: a user who likes the Contracts default needs
+    *some* way to confirm and unlock the app).
+
+    Earlier we had `if selected:` which fired on first render — st.pills
+    returns its default value immediately, so the dialog rerun()'d itself
+    closed before the user could see anything.
     """
     from irac_engine import AREAS_OF_LAW
     current = st.session_state.get(state_key) or default
@@ -22,10 +26,19 @@ def pick_area_dialog(state_key: str, default: str = "Contracts"):
         key=f"_dialog_pills_{state_key}",
         label_visibility="collapsed",
     )
-    if selected:
+
+    # Snappy path: user clicked a different pill. Auto-confirm and close.
+    if selected and selected != current:
         st.session_state[state_key] = selected
-        # Flip the first-run gate even if the user picks the default that
-        # was already shown — we treat any explicit confirmation as enough.
+        st.session_state["area_confirmed"] = True
+        st.rerun()
+
+    # Fallback: explicit confirm for "I'm fine with this one already". Mostly
+    # matters on first run when the welcome gate needs area_confirmed=True
+    # and the user doesn't want to change away from the default.
+    if st.button(f"Use {selected or current}", type="primary",
+                 use_container_width=True, key=f"_dialog_confirm_{state_key}"):
+        st.session_state[state_key] = selected or current
         st.session_state["area_confirmed"] = True
         st.rerun()
 
@@ -533,8 +546,10 @@ def stream_with_progress(facts: str, area: str,
     current_sublabel = "Reading the facts..."
     last_section_pct = start_pct  # tracks last pct set by a section marker
 
-    inject = bool(st.session_state.get("inject_outlines", True))
-    for event, data in stream_irreac(facts, area, inject_outlines=inject):
+    source = st.session_state.get("outline_source", "default")
+    if source not in ("mine", "default", "none"):
+        source = "default"
+    for event, data in stream_irreac(facts, area, outline_source=source):
         if event == "status":
             step_pct, sublabel = _PROGRESS_STEPS.get(data, (start_pct + 10, ""))
             new_pct = start_pct + int((step_pct / 100) * (end_pct - start_pct))

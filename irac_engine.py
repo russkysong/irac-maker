@@ -375,6 +375,29 @@ Complexity: {complexity}
 Fact pattern (plain prose only):"""
 
 
+DEFAULT_OUTLINE_SYSTEM = """You are writing a concise rule-reference outline for an American law school student.
+
+Your job is RULES, not analysis. Output is markdown text only — no JSON, no preamble.
+
+Style guide:
+- Hierarchical: top-level doctrines (## headers), sub-doctrines (###), elements as bullet lists.
+- Cite sources: Restatement (Second/Third) §, UCC §, landmark case + year. Plaintext citations, no fancy formatting.
+- Note majority vs minority where relevant. Mark MBE-tested rules clearly.
+- Keep the whole outline tight — target 700–1200 words. This is a quick reference, not a hornbook.
+- Cover: black-letter rules, elements, exceptions, defenses, relevant tests/standards.
+
+DO NOT include: hypos, fact patterns, IRAC examples, lengthy case explanations, or commentary.
+ONLY rules, elements, and citations.
+
+Begin directly with the first ## header. No preamble like "Here is your outline:"."""
+
+DEFAULT_OUTLINE_PROMPT = """Write a tight rule-reference outline for {area}.
+
+Use majority/MBE-tested rules unless a minority position is exam-relevant.
+
+Output: markdown only."""
+
+
 # ── functions ──────────────────────────────────────────────────────────────────
 
 def _chat(system: str | None, user: str, use_json: bool = True) -> dict:
@@ -394,28 +417,47 @@ def _chat(system: str | None, user: str, use_json: bool = True) -> dict:
     return ollama.chat(**kwargs)
 
 
-def _build_generate_prompt(facts: str, area: str, inject_outlines: bool) -> str:
-    """Pick GENERATE_PROMPT or its outline-augmented variant.
+def _build_generate_prompt(facts: str, area: str, outline_source: str = "default") -> str:
+    """Pick GENERATE_PROMPT or its outline-augmented variant based on source.
 
-    Imports outlines lazily so this module never hard-depends on it — keeps
-    irac_engine.py importable in unit-test contexts without the storage layer.
+    `outline_source`:
+      "mine"    — keyword-matched excerpts from the user's uploaded outlines
+                  (outlines.py)
+      "default" — the AI-generated, lazy-cached built-in outline for `area`
+                  (default_outlines.py)
+      "none"    — no outline context; LLM uses only its own training knowledge
+
+    All sub-imports are lazy so this module stays importable in environments
+    without filesystem state.
     """
-    if inject_outlines:
+    extras = ""
+    if outline_source == "mine":
         try:
             import outlines as _outlines
             extras = _outlines.relevant_excerpts(facts, area)
         except Exception:
             extras = ""
-        if extras:
-            return GENERATE_PROMPT_WITH_OUTLINE.format(
-                area=area, facts=facts.strip(), excerpts=extras,
-            )
+    elif outline_source == "default":
+        try:
+            import default_outlines as _do
+            extras = _do.get_or_generate(area)
+            # Cap the inject — built-in outlines target ~1200 words but the
+            # LLM occasionally overshoots, and ctx_size is 4096 in Modelfile.
+            if extras and len(extras) > 6000:
+                extras = extras[:6000] + "\n[…truncated…]"
+        except Exception:
+            extras = ""
+
+    if extras:
+        return GENERATE_PROMPT_WITH_OUTLINE.format(
+            area=area, facts=facts.strip(), excerpts=extras,
+        )
     return GENERATE_PROMPT.format(area=area, facts=facts.strip())
 
 
 def generate_irreac(facts: str, area: str = "Contracts",
-                    inject_outlines: bool = True) -> IRRACOutput:
-    prompt = _build_generate_prompt(facts, area, inject_outlines)
+                    outline_source: str = "default") -> IRRACOutput:
+    prompt = _build_generate_prompt(facts, area, outline_source)
     resp = ollama.chat(
         model=MODEL_NAME,
         messages=[{"role": "user", "content": prompt}],
@@ -439,7 +481,7 @@ _SECTION_LABELS = {
 
 
 def stream_irreac(facts: str, area: str = "Contracts",
-                  inject_outlines: bool = True):
+                  outline_source: str = "default"):
     """
     Yields progress events while streaming the IRAC generation.
     Event types:
@@ -447,11 +489,12 @@ def stream_irreac(facts: str, area: str = "Contracts",
       ("token",  text)    — raw token (for optional live display)
       ("done",   IRRACOutput) — generation complete, parsed result
 
-    inject_outlines: if True, look up the user's uploaded outlines for `area`
-    and prepend matching excerpts to the prompt. Off-by-default in callers
-    that shouldn't be touched by user data (e.g. plaintiff/defendant generation).
+    outline_source: "mine" | "default" | "none" — see _build_generate_prompt.
+    Plaintiff/Defendant generation in Both Sides intentionally passes "none"
+    so user-specific or built-in outlines don't bias an opposing-counsel
+    exercise.
     """
-    prompt = _build_generate_prompt(facts, area, inject_outlines)
+    prompt = _build_generate_prompt(facts, area, outline_source)
     # NOTE: format="json" + stream=True buffers the entire response before yielding
     # any tokens, defeating streaming. We omit format here and parse JSON manually.
     stream = ollama.chat(
@@ -500,9 +543,9 @@ def stream_irreac(facts: str, area: str = "Contracts",
         except Exception:
             # Last resort: deterministic re-call with format=json. Still slow
             # but at least guaranteed-valid output rather than a third failure.
-            # Pass `inject_outlines` through so the fallback uses the same
+            # Pass outline_source through so the fallback uses the same
             # context the original streaming attempt did.
-            result = generate_irreac(facts, area, inject_outlines)
+            result = generate_irreac(facts, area, outline_source)
     yield ("done", result)
 
 
@@ -611,6 +654,27 @@ def compare_irac(
         )
     resp = _chat(FEEDBACK_SYSTEM, prompt, use_json=True)
     return IRACFeedback(**json.loads(resp["message"]["content"]))
+
+
+def generate_default_outline(area: str) -> str:
+    """Generate a tight rule-reference outline for the given area of law.
+
+    Returns markdown text. Long output budget (num_predict=2400) because we
+    want a 700–1200 word outline; system prompt enforces the upper bound.
+    Called by default_outlines.get_or_generate() on first request per area.
+    """
+    prompt = DEFAULT_OUTLINE_PROMPT.format(area=area)
+    resp = ollama.chat(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": DEFAULT_OUTLINE_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+        options={"num_predict": 2400},
+        keep_alive=_KEEP_ALIVE,
+        think=False,
+    )
+    return resp["message"]["content"].strip()
 
 
 def generate_hypo(area: str = "Contracts", complexity: str = "Multi-issue") -> str:
