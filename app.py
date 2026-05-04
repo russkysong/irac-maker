@@ -6,6 +6,7 @@ import styles
 import components as C
 import outlines
 import history
+import preferences
 from irac_engine import (
     compare_irac, grade_issue_spot, grade_essay, generate_mbe_question,
     generate_hypo,
@@ -36,9 +37,36 @@ def _safe_area(value, default: str = "Contracts") -> str:
     return value if value in AREAS_OF_LAW else default
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner="Warming up the model…")
 def _model_ready_cached() -> bool:
-    return check_model_ready()
+    """Check that the model exists AND force it into VRAM with a tiny call.
+
+    Without warm-up, the user's first real request pays the 10-30s model-load
+    cost with no UI feedback. With it, that cost is paid once during the
+    Streamlit "Loading…" spinner before the page even renders, and every
+    subsequent interaction (within keep_alive=30m) is instant.
+
+    Cached via @st.cache_resource so this runs ONCE per session even though
+    Streamlit reruns the whole script on every interaction.
+    """
+    if not check_model_ready():
+        return False
+    try:
+        import ollama
+        from irac_engine import MODEL_NAME
+        ollama.chat(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": "ready"}],
+            options={"num_predict": 4},
+            keep_alive="30m",
+            think=False,
+        )
+    except Exception:
+        # Even if warm-up fails (network blip, transient ollama issue), the
+        # existence check passed — let the user proceed; their first real
+        # request will trigger the load with the regular spinner.
+        pass
+    return True
 
 if not _model_ready_cached():
     st.error("**Model not found.** Run setup first:\n\n```bash\nbash setup.sh\n```", icon="🔴")
@@ -46,7 +74,10 @@ if not _model_ready_cached():
 
 # ── Session state ──────────────────────────────────────────────────────────────
 DEFAULTS = {
-    "last_irac": None, "last_facts": "", "last_area": "Contracts",
+    "last_irac": None, "last_facts": "",
+    # Single source of truth for area-of-law across all 11 tabs. Pick once
+    # via the chip in any tab — every other tab reads the same value.
+    "current_area": "Contracts",
     "socratic_history": [], "socratic_facts": "", "socratic_area": "Contracts",
     "socratic_started": False,
     # MBE Practice state
@@ -56,6 +87,27 @@ DEFAULTS = {
 for k, v in DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
+# ── Persistent UI preferences ──────────────────────────────────────────────────
+# Load saved prefs and seed session_state for keys that aren't already set.
+# Saving happens via _persist_prefs() at the bottom of every script run.
+_PERSISTED_KEYS = ("current_area", "cmp_mode")
+_saved_prefs = preferences.load()
+for _k in _PERSISTED_KEYS:
+    if _k in _saved_prefs and _k not in st.session_state:
+        st.session_state[_k] = _saved_prefs[_k]
+
+
+def _persist_prefs() -> None:
+    """Write current values of persisted keys to disk if they've changed.
+
+    Called once at the end of each script run. We compare against the snapshot
+    we loaded so we only hit disk when something actually moved.
+    """
+    snapshot = {k: st.session_state.get(k) for k in _PERSISTED_KEYS
+                if k in st.session_state}
+    if snapshot != _saved_prefs:
+        preferences.save(snapshot)
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 # Two-level structure: 3 category tabs at the top, sub-tabs inside each.
@@ -89,9 +141,9 @@ with top_library:
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_gen:
     # ── Setup (full width, single column) ─────────────────────────────────────
-    _area = _safe_area(st.session_state.get("area_gen_value"))
+    _area = _safe_area(st.session_state.get("current_area"))
     if st.button(f"⚖️ Area of Law: {_area}", key="btn_area_gen"):
-        C.pick_area_dialog("area_gen_value")
+        C.pick_area_dialog("current_area")
     area_gen = _area
     facts_gen = st.text_area(
         "Facts", height=260, key="facts_gen",
@@ -136,7 +188,7 @@ with tab_gen:
                 result = C.stream_with_progress(facts_gen, area_gen)
                 st.session_state.last_irac = result
                 st.session_state.last_facts = facts_gen
-                st.session_state.last_area = area_gen
+                st.session_state.current_area = area_gen
                 # Auto-save to ~/.iracmaker/history/. Failures here shouldn't
                 # block showing the IRAC, so swallow exceptions silently.
                 try:
@@ -260,9 +312,9 @@ with tab_both:
 </div>
 """, unsafe_allow_html=True)
 
-    _area_bs = _safe_area(st.session_state.get("area_bs_value"))
+    _area_bs = _safe_area(st.session_state.get("current_area"))
     if st.button(f"⚖️ Area of Law: {_area_bs}", key="btn_area_bs"):
-        C.pick_area_dialog("area_bs_value")
+        C.pick_area_dialog("current_area")
     area_bs = _area_bs
     facts_bs = st.text_area("Facts", height=180, key="facts_bs",
                             placeholder="Paste the fact pattern here...")
@@ -287,7 +339,7 @@ with tab_both:
                 # Default to plaintiff for cross-tab handoff to Compare/PDF.
                 st.session_state.last_irac = p_result
                 st.session_state.last_facts = facts_bs
-                st.session_state.last_area = area_bs
+                st.session_state.current_area = area_bs
                 st.divider()
                 # Stacked vertical layout — plaintiff first, then defendant.
                 st.markdown('<div class="section-label" style="color:#d97757;">Plaintiff\'s Best Argument</div>', unsafe_allow_html=True)
@@ -314,13 +366,11 @@ with tab_spot:
 </div>
 """, unsafe_allow_html=True)
 
-    _area_spot = _safe_area(
-        st.session_state.get("area_spot_value") or st.session_state.get("last_area")
-    )
+    _area_spot = _safe_area(st.session_state.get("current_area"))
     col_area_spot, col_hypo_spot = st.columns([3, 1])
     with col_area_spot:
         if st.button(f"⚖️ Area of Law: {_area_spot}", key="btn_area_spot"):
-            C.pick_area_dialog("area_spot_value")
+            C.pick_area_dialog("current_area")
     area_spot = _area_spot
     with col_hypo_spot:
         if st.button("⚡ Generate hypo", key="hypo_spot",
@@ -409,11 +459,9 @@ with tab_mbe:
     # ── Settings row + score badge ────────────────────────────────────────────
     col_area, col_diff, col_score = st.columns([2, 2, 1])
     with col_area:
-        _area_mbe = _safe_area(
-            st.session_state.get("area_mbe_value") or st.session_state.get("last_area")
-        )
+        _area_mbe = _safe_area(st.session_state.get("current_area"))
         if st.button(f"⚖️ Area of Law: {_area_mbe}", key="btn_area_mbe"):
-            C.pick_area_dialog("area_mbe_value")
+            C.pick_area_dialog("current_area")
         area_mbe = _area_mbe
     with col_diff:
         difficulty_mbe = st.pills(
@@ -556,13 +604,11 @@ with tab_cmp:
     )
     is_paste = cmp_mode == "Paste my whole IRAC as one block"
 
-    _area_cmp = _safe_area(
-        st.session_state.get("area_cmp_value") or st.session_state.last_area
-    )
+    _area_cmp = _safe_area(st.session_state.get("current_area"))
     col_area_cmp, col_hypo_cmp = st.columns([3, 1])
     with col_area_cmp:
         if st.button(f"⚖️ Area of Law: {_area_cmp}", key="btn_area_cmp"):
-            C.pick_area_dialog("area_cmp_value")
+            C.pick_area_dialog("current_area")
     area_cmp = _area_cmp
     with col_hypo_cmp:
         if st.button("⚡ Generate hypo", key="hypo_cmp",
@@ -697,7 +743,7 @@ with tab_cmp:
                 )
                 st.session_state.last_irac = model_irac
                 st.session_state.last_facts = facts_cmp
-                st.session_state.last_area = area_cmp
+                st.session_state.current_area = area_cmp
 
                 # In paste mode, the whole text fills all four student fields —
                 # compare_irac dedupes them and sends one combined block to the grader.
@@ -803,13 +849,11 @@ with tab_essay:
 </div>
 """, unsafe_allow_html=True)
 
-    _area_essay = _safe_area(
-        st.session_state.get("area_essay_value") or st.session_state.get("last_area")
-    )
+    _area_essay = _safe_area(st.session_state.get("current_area"))
     col_area_essay, col_hypo_essay = st.columns([3, 1])
     with col_area_essay:
         if st.button(f"⚖️ Area of Law: {_area_essay}", key="btn_area_essay"):
-            C.pick_area_dialog("area_essay_value")
+            C.pick_area_dialog("current_area")
     area_essay = _area_essay
     with col_hypo_essay:
         if st.button("⚡ Generate hypo", key="hypo_essay",
@@ -891,9 +935,9 @@ with tab_soc:
 """, unsafe_allow_html=True)
 
     if not st.session_state.socratic_started:
-        _area_soc = _safe_area(st.session_state.get("soc_area_value"))
+        _area_soc = _safe_area(st.session_state.get("current_area"))
         if st.button(f"⚖️ Area of Law: {_area_soc}", key="btn_area_soc"):
-            C.pick_area_dialog("soc_area_value")
+            C.pick_area_dialog("current_area")
         soc_area = _area_soc
         col_soc_f, col_soc_btn = st.columns([3, 1])
         with col_soc_f:
@@ -971,7 +1015,7 @@ with tab_soc:
                     )
                     st.session_state.last_irac = result
                     st.session_state.last_facts = st.session_state.socratic_facts
-                    st.session_state.last_area = st.session_state.socratic_area
+                    st.session_state.current_area = st.session_state.socratic_area
                     C.show_irreac(result)
                     pdf_bytes = export_to_pdf(
                         result, st.session_state.socratic_facts,
@@ -1272,7 +1316,7 @@ with tab_history:
 
                 col_open, col_del = st.columns([4, 1])
                 with col_open:
-                    # Note: clicking this only seeds last_facts / last_area so
+                    # Note: clicking this only seeds last_facts / current_area so
                     # the Compare tab pre-fills the facts box and area chip.
                     # The Compare tab still regenerates a fresh AI model on
                     # grade — it doesn't reuse the saved IRAC. Keep the label
@@ -1284,7 +1328,7 @@ with tab_history:
                     ):
                         st.session_state.last_irac = _IRRACOutput(**result)
                         st.session_state.last_facts = entry.get("facts", "")
-                        st.session_state.last_area = _safe_area(area)
+                        st.session_state.current_area = _safe_area(area)
                         # facts_cmp may already exist from a prior visit —
                         # overwrite it so the freshly-loaded facts actually appear.
                         st.session_state["facts_cmp"] = entry.get("facts", "")
@@ -1389,3 +1433,7 @@ with tab_about:
     C.section_tip("application")
     st.markdown("**C — Conclusion**")
     C.section_tip("conclusion")
+
+
+# ── Persist user preferences (last thing each run) ────────────────────────────
+_persist_prefs()
