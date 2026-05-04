@@ -131,7 +131,7 @@ _STOPWORDS = {
     "were", "their", "they", "them", "would", "could", "should", "shall",
     "will", "into", "when", "what", "where", "which", "while", "after",
     "before", "between", "because", "about", "above", "below", "under",
-    "over", "during", "such", "than", "then", "than", "more", "most",
+    "over", "during", "such", "than", "then", "more", "most",
     "some", "other", "another", "each", "every", "both", "either",
     "neither", "also", "only", "very", "just", "even", "still", "again",
     "thus", "hence", "however", "moreover", "therefore",
@@ -139,16 +139,23 @@ _STOPWORDS = {
 
 
 def _keywords(facts: str, n: int = 15) -> List[str]:
-    """Pull up to N candidate keywords (≥4 chars, non-stop-word) from facts."""
+    """Pull up to N candidate keywords (≥4 chars, non-stop-word) from facts.
+
+    Order matters (we iterate keywords in fact-pattern order looking for hits
+    in outlines), but membership-check needs O(1) — so we keep both an ordered
+    list and a set for dedup.
+    """
     words = re.findall(r"\b[A-Za-z][A-Za-z'-]{3,}\b", facts.lower())
-    seen: List[str] = []
+    seen_set: set = set()
+    seen_list: List[str] = []
     for w in words:
-        if w in _STOPWORDS or w in seen:
+        if w in _STOPWORDS or w in seen_set:
             continue
-        seen.append(w)
-        if len(seen) >= n:
+        seen_set.add(w)
+        seen_list.append(w)
+        if len(seen_list) >= n:
             break
-    return seen
+    return seen_list
 
 
 def relevant_excerpts(facts: str, area: str, max_chars: int = 4000) -> str:

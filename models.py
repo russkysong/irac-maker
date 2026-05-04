@@ -6,13 +6,17 @@ class IRRACOutput(BaseModel):
     """
     IRREAC = Issue, Rule Statement, Rule Exploration, Application, Conclusion.
     Two-Rule variant outperforms standard IRAC by ~7 points (2022 research).
+
+    All fields default to empty so a partial response (truncated mid-output)
+    still parses. show_irreac renders empty strings as italic placeholders
+    rather than crashing — strictly better UX than ValidationError.
     """
-    issue: str = Field(description="Legal question framed as whether X given Y")
-    rule_statement: str = Field(description="Specific rule with statute/restatement citation")
-    rule_exploration: str = Field(description="Court interpretations, key cases, majority vs minority views")
-    application: str = Field(description="Element-by-element analysis of facts against each rule component")
-    conclusion: str = Field(description="Direct answer with confidence level and one-sentence reason")
-    tips: List[str] = Field(description="Common mistakes students make on this type of issue")
+    issue: str = Field(default="", description="Legal question framed as whether X given Y")
+    rule_statement: str = Field(default="", description="Specific rule with statute/restatement citation")
+    rule_exploration: str = Field(default="", description="Court interpretations, key cases, majority vs minority views")
+    application: str = Field(default="", description="Element-by-element analysis of facts against each rule component")
+    conclusion: str = Field(default="", description="Direct answer with confidence level and one-sentence reason")
+    tips: List[str] = Field(default_factory=list, description="Common mistakes students make on this type of issue")
 
 
 class DualIRAC(BaseModel):

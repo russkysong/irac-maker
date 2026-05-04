@@ -25,6 +25,17 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+def _safe_area(value, default: str = "Contracts") -> str:
+    """Normalize an area-of-law string to a known value.
+
+    Defends against stale/corrupted session_state values that could end up
+    in the LLM prompt. Only the dialog picker writes these keys today, but
+    a forgotten test value or an old saved session could otherwise leak
+    through to generation.
+    """
+    return value if value in AREAS_OF_LAW else default
+
+
 @st.cache_resource(show_spinner=False)
 def _model_ready_cached() -> bool:
     return check_model_ready()
@@ -78,7 +89,7 @@ with top_library:
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_gen:
     # ── Setup (full width, single column) ─────────────────────────────────────
-    _area = st.session_state.get("area_gen_value") or "Contracts"
+    _area = _safe_area(st.session_state.get("area_gen_value"))
     if st.button(f"⚖️ Area of Law: {_area}", key="btn_area_gen"):
         C.pick_area_dialog("area_gen_value")
     area_gen = _area
@@ -249,7 +260,7 @@ with tab_both:
 </div>
 """, unsafe_allow_html=True)
 
-    _area_bs = st.session_state.get("area_bs_value") or "Contracts"
+    _area_bs = _safe_area(st.session_state.get("area_bs_value"))
     if st.button(f"⚖️ Area of Law: {_area_bs}", key="btn_area_bs"):
         C.pick_area_dialog("area_bs_value")
     area_bs = _area_bs
@@ -303,7 +314,9 @@ with tab_spot:
 </div>
 """, unsafe_allow_html=True)
 
-    _area_spot = st.session_state.get("area_spot_value") or st.session_state.get("last_area") or "Contracts"
+    _area_spot = _safe_area(
+        st.session_state.get("area_spot_value") or st.session_state.get("last_area")
+    )
     col_area_spot, col_hypo_spot = st.columns([3, 1])
     with col_area_spot:
         if st.button(f"⚖️ Area of Law: {_area_spot}", key="btn_area_spot"):
@@ -396,7 +409,9 @@ with tab_mbe:
     # ── Settings row + score badge ────────────────────────────────────────────
     col_area, col_diff, col_score = st.columns([2, 2, 1])
     with col_area:
-        _area_mbe = st.session_state.get("area_mbe_value") or st.session_state.get("last_area") or "Contracts"
+        _area_mbe = _safe_area(
+            st.session_state.get("area_mbe_value") or st.session_state.get("last_area")
+        )
         if st.button(f"⚖️ Area of Law: {_area_mbe}", key="btn_area_mbe"):
             C.pick_area_dialog("area_mbe_value")
         area_mbe = _area_mbe
@@ -467,7 +482,15 @@ with tab_mbe:
         st.divider()
         C.show_mbe_question_card(question)
 
-        if not st.session_state.get("mbe_submitted"):
+        # Defensive guard: if the model returned a malformed question with no
+        # choices, the radio would render empty and the Submit button would be
+        # permanently disabled — silent broken UI. Show a clear retry message.
+        if not question.choices:
+            st.error(
+                "Question generation returned no choices. Click "
+                "**Generate new question** above to try again."
+            )
+        elif not st.session_state.get("mbe_submitted"):
             # Pre-submit: radio + Submit
             choice_letters = [c.letter for c in question.choices]
             choice_labels = {c.letter: f"**{c.letter}.** {c.text}" for c in question.choices}
@@ -533,7 +556,9 @@ with tab_cmp:
     )
     is_paste = cmp_mode == "Paste my whole IRAC as one block"
 
-    _area_cmp = st.session_state.get("area_cmp_value") or st.session_state.last_area
+    _area_cmp = _safe_area(
+        st.session_state.get("area_cmp_value") or st.session_state.last_area
+    )
     col_area_cmp, col_hypo_cmp = st.columns([3, 1])
     with col_area_cmp:
         if st.button(f"⚖️ Area of Law: {_area_cmp}", key="btn_area_cmp"):
@@ -778,7 +803,9 @@ with tab_essay:
 </div>
 """, unsafe_allow_html=True)
 
-    _area_essay = st.session_state.get("area_essay_value") or st.session_state.get("last_area") or "Contracts"
+    _area_essay = _safe_area(
+        st.session_state.get("area_essay_value") or st.session_state.get("last_area")
+    )
     col_area_essay, col_hypo_essay = st.columns([3, 1])
     with col_area_essay:
         if st.button(f"⚖️ Area of Law: {_area_essay}", key="btn_area_essay"):
@@ -864,7 +891,7 @@ with tab_soc:
 """, unsafe_allow_html=True)
 
     if not st.session_state.socratic_started:
-        _area_soc = st.session_state.get("soc_area_value") or "Contracts"
+        _area_soc = _safe_area(st.session_state.get("soc_area_value"))
         if st.button(f"⚖️ Area of Law: {_area_soc}", key="btn_area_soc"):
             C.pick_area_dialog("soc_area_value")
         soc_area = _area_soc
@@ -1245,15 +1272,27 @@ with tab_history:
 
                 col_open, col_del = st.columns([4, 1])
                 with col_open:
+                    # Note: clicking this only seeds last_facts / last_area so
+                    # the Compare tab pre-fills the facts box and area chip.
+                    # The Compare tab still regenerates a fresh AI model on
+                    # grade — it doesn't reuse the saved IRAC. Keep the label
+                    # honest about that.
                     if entry_type_v == "irac" and st.button(
-                        "Reopen in Compare & Feedback",
+                        "Load these facts into Compare & Feedback",
                         key=f"reopen_{entry_id}",
                         use_container_width=True,
                     ):
                         st.session_state.last_irac = _IRRACOutput(**result)
                         st.session_state.last_facts = entry.get("facts", "")
-                        st.session_state.last_area = area or "Contracts"
-                        st.toast("Loaded into Compare & Feedback tab.", icon="↗️")
+                        st.session_state.last_area = _safe_area(area)
+                        # facts_cmp may already exist from a prior visit —
+                        # overwrite it so the freshly-loaded facts actually appear.
+                        st.session_state["facts_cmp"] = entry.get("facts", "")
+                        st.toast(
+                            "Facts loaded. Switch to Practice → Compare & Feedback "
+                            "and write your draft.",
+                            icon="↗️",
+                        )
                 with col_del:
                     if st.button("Delete", key=f"hist_del_{entry_id}",
                                  use_container_width=True):
