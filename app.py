@@ -169,13 +169,13 @@ with tab_gen:
     st.divider()
     st.markdown('<div class="section-label">How IRAC Works</div>', unsafe_allow_html=True)
     st.markdown("""
-<p style="font-family:Lora,serif;font-size:15px;color:#e8e6dc;line-height:1.7;">
-<strong>IRAC</strong> is the standard legal reasoning framework used in American law schools and on the bar exam.
+<p style="font-family:Lora,serif;font-size:12.5px;color:#b0aea5;line-height:1.55;margin-bottom:0.4rem;">
+<strong style="color:#e8e6dc;">IRAC</strong> is the standard legal reasoning framework used in American law schools and on the bar exam.
 </p>
 
 <table class="how-irac-table">
     <colgroup>
-        <col style="width: 220px;">
+        <col style="width: 170px;">
         <col>
     </colgroup>
     <thead>
@@ -184,13 +184,13 @@ with tab_gen:
     <tbody>
         <tr><td><strong>I — Issue</strong></td><td>The precise legal question the court must answer</td></tr>
         <tr><td><strong>R — Rule</strong></td><td>The applicable rule with citation — statute, restatement section, or landmark case</td></tr>
-        <tr><td><strong>A — Application</strong></td><td>Each rule element applied to the specific facts — <strong>this is where exam points are won or lost</strong></td></tr>
+        <tr><td><strong>A — Application</strong></td><td>Each rule element applied to the specific facts — <strong style="color:#faf9f5;">this is where exam points are won or lost</strong></td></tr>
         <tr><td><strong>C — Conclusion</strong></td><td>A direct answer to the Issue, with a confidence level</td></tr>
     </tbody>
 </table>
 
-<p style="font-family:Lora,serif;font-size:15px;color:#e8e6dc;line-height:1.7;margin-top:1rem;">
-<strong>Note:</strong> The AI breaks the Rule into two parts — what the rule says, and how courts have interpreted it. This gives you richer Rule analysis than a basic IRAC outline.
+<p style="font-family:Lora,serif;font-size:12px;color:#6e6c65;font-style:italic;line-height:1.55;margin-top:0.5rem;">
+<strong style="color:#b0aea5;font-style:normal;">Note:</strong> The AI breaks the Rule into two parts — what the rule says, and how courts have interpreted it. Richer than a basic IRAC outline.
 </p>
 """, unsafe_allow_html=True)
 
