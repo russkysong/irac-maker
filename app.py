@@ -46,12 +46,30 @@ for k, v in DEFAULTS.items():
         st.session_state[k] = v
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-(tab_gen, tab_brief, tab_both, tab_spot, tab_mbe,
- tab_cmp, tab_essay, tab_soc, tab_outlines, tab_history, tab_about) = st.tabs([
-    "Generate IRAC", "Case Brief", "Both Sides", "Issue Spotting", "MBE Practice",
-    "Compare & Feedback", "Long Essay", "Socratic Mode",
-    "My Outlines", "History", "About",
-])
+# Two-level structure: 3 category tabs at the top, sub-tabs inside each.
+# We keep the original tab_xxx variable names (declared inside the appropriate
+# `with top_*:` block) so every existing `with tab_xxx:` block elsewhere in the
+# file still works without renaming. The DeltaGenerator each variable points to
+# is now a sub-tab that lives inside its parent category — Streamlit handles
+# rendering to the right place even when `with tab_xxx:` is used outside the
+# parent's `with` block.
+top_gen, top_practice, top_library = st.tabs(["Generate", "Practice", "Library"])
+
+with top_gen:
+    tab_gen, tab_brief, tab_both = st.tabs([
+        "IRAC", "Case Brief", "Both Sides",
+    ])
+
+with top_practice:
+    tab_spot, tab_mbe, tab_cmp, tab_essay, tab_soc = st.tabs([
+        "Issue Spotting", "MBE Practice", "Compare & Feedback",
+        "Long Essay", "Socratic Mode",
+    ])
+
+with top_library:
+    tab_outlines, tab_history, tab_about = st.tabs([
+        "My Outlines", "History", "About",
+    ])
 
 
 # ════════════════════════════════════════════════════════════════════════════════
