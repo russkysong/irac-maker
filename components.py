@@ -22,8 +22,11 @@ def pick_area_dialog(state_key: str, default: str = "Contracts"):
         key=f"_dialog_pills_{state_key}",
         label_visibility="collapsed",
     )
-    if selected and selected != current:
+    if selected:
         st.session_state[state_key] = selected
+        # Flip the first-run gate even if the user picks the default that
+        # was already shown — we treat any explicit confirmation as enough.
+        st.session_state["area_confirmed"] = True
         st.rerun()
 
 # ── Word count targets per IRAC section ───────────────────────────────────────

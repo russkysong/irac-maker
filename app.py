@@ -78,6 +78,10 @@ DEFAULTS = {
     # Single source of truth for area-of-law across all 11 tabs. Pick once
     # via the chip in any tab — every other tab reads the same value.
     "current_area": "Contracts",
+    # First-run gate — flips to True once the user explicitly picks an area
+    # via pick_area_dialog. Returning users with `current_area` in the prefs
+    # file get area_confirmed=True at startup so they skip the welcome card.
+    "area_confirmed": False,
     "socratic_history": [], "socratic_facts": "", "socratic_area": "Contracts",
     "socratic_started": False,
     # MBE Practice state
@@ -97,6 +101,12 @@ for _k in _PERSISTED_KEYS:
     if _k in _saved_prefs and _k not in st.session_state:
         st.session_state[_k] = _saved_prefs[_k]
 
+# Returning user — they already picked an area in a past session, so skip
+# the welcome gate. We use `setdefault` so reruns within a session don't
+# clobber a freshly-flipped flag.
+if "current_area" in _saved_prefs:
+    st.session_state["area_confirmed"] = True
+
 
 def _persist_prefs() -> None:
     """Write current values of persisted keys to disk if they've changed.
@@ -108,6 +118,42 @@ def _persist_prefs() -> None:
                 if k in st.session_state}
     if snapshot != _saved_prefs:
         preferences.save(snapshot)
+
+# ── First-run welcome gate ────────────────────────────────────────────────────
+# Generation-tab inputs are disabled (`_locked`) until the user explicitly
+# confirms an area-of-law pick. The welcome card below appears only on first
+# run — once `area_confirmed` flips True (via pick_area_dialog), the card
+# stops rendering and `_locked` becomes False. Library tabs are unaffected.
+_locked = not st.session_state.get("area_confirmed", False)
+
+if _locked:
+    st.markdown("""
+<div class="irac-card irac-card-accent"
+     style="margin-bottom:1.25rem;padding:22px 26px;text-align:center;">
+    <div style="font-size:1.6rem;margin-bottom:0.4rem;">👋</div>
+    <div style="font-family:Poppins,sans-serif;font-size:17px;font-weight:600;
+                color:#faf9f5;margin-bottom:0.5rem;">
+        Welcome — pick your Area of Law to start
+    </div>
+    <div style="font-family:Lora,serif;font-size:13.5px;color:#b0aea5;
+                line-height:1.6;">
+        Every IRAC, brief, and drill needs to know which area of doctrine
+        to use. Pick once below — your choice is saved and you can change
+        it any time from the chip in any tab.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+    _gate_col_l, _gate_col_pick, _gate_col_r = st.columns([1, 2, 1])
+    with _gate_col_pick:
+        _gate_area = _safe_area(st.session_state.get("current_area"))
+        if st.button(
+            f"⚖️ Pick Area of Law — currently {_gate_area}",
+            key="gate_area_btn",
+            use_container_width=True,
+            type="primary",
+        ):
+            C.pick_area_dialog("current_area")
+    st.divider()
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 # Two-level structure: 3 category tabs at the top, sub-tabs inside each.
@@ -147,6 +193,7 @@ with tab_gen:
     area_gen = _area
     facts_gen = st.text_area(
         "Facts", height=260, key="facts_gen",
+        disabled=_locked,
         placeholder=(
             "Paste or type your fact pattern here...\n\n"
             "e.g. Alice offered to sell her 2020 Honda Civic for $12,000. "
@@ -156,9 +203,9 @@ with tab_gen:
     )
     col_a, col_b = st.columns([3, 2])
     with col_a:
-        gen_btn = st.button("Generate IRAC", type="primary", use_container_width=True)
+        gen_btn = st.button("Generate IRAC", type="primary", use_container_width=True, disabled=_locked)
     with col_b:
-        zoom_btn = st.button("Issue Map First", use_container_width=True, help="See all issues before full analysis")
+        zoom_btn = st.button("Issue Map First", use_container_width=True, disabled=_locked, help="See all issues before full analysis")
 
     st.divider()
 
@@ -266,6 +313,7 @@ with tab_brief:
         "Case opinion",
         height=320,
         key="case_text",
+        disabled=_locked,
         placeholder=(
             "Paste the full opinion (or a long excerpt) here.\n\n"
             "Tip: include the case caption (Plaintiff v. Defendant, Cite, Year) "
@@ -276,6 +324,7 @@ with tab_brief:
         "Generate Brief",
         type="primary",
         use_container_width=True,
+        disabled=_locked,
         key="brief_btn",
     )
 
@@ -317,8 +366,10 @@ with tab_both:
         C.pick_area_dialog("current_area")
     area_bs = _area_bs
     facts_bs = st.text_area("Facts", height=180, key="facts_bs",
+                            disabled=_locked,
                             placeholder="Paste the fact pattern here...")
-    both_btn = st.button("Generate Both Sides", type="primary", use_container_width=True)
+    both_btn = st.button("Generate Both Sides", type="primary",
+                         use_container_width=True, disabled=_locked)
 
     if both_btn:
         if not facts_bs.strip():
@@ -375,6 +426,7 @@ with tab_spot:
     with col_hypo_spot:
         if st.button("⚡ Generate hypo", key="hypo_spot",
                      use_container_width=True,
+                     disabled=_locked,
                      help="Have the AI write a fresh fact pattern in this area."):
             try:
                 with st.spinner("Drafting a fresh hypo..."):
@@ -387,12 +439,14 @@ with tab_spot:
         "Facts",
         height=200,
         key="facts_spot",
+        disabled=_locked,
         placeholder="Paste the fact pattern here, or click ⚡ Generate hypo.",
     )
     issues_spot = st.text_area(
         "Issues you spotted (one per line)",
         height=180,
         key="issues_spot",
+        disabled=_locked,
         placeholder=(
             "List each issue you see. One per line. Loose phrasing is fine.\n\n"
             "e.g.\n"
@@ -406,6 +460,7 @@ with tab_spot:
         "Grade my spotting",
         type="primary",
         use_container_width=True,
+        disabled=_locked,
         key="spot_btn",
     )
 
@@ -469,6 +524,7 @@ with tab_mbe:
             default=st.session_state.get("mbe_difficulty", "Medium"),
             key="mbe_difficulty",
             label_visibility="collapsed",
+            disabled=_locked,
         ) or "Medium"
     with col_score:
         total = st.session_state.get("mbe_total_count", 0)
@@ -491,6 +547,7 @@ with tab_mbe:
         new_q_btn = st.button(
             "Generate new question" if st.session_state.get("mbe_question") else "Generate first question",
             type="primary", use_container_width=True, key="mbe_new_btn",
+            disabled=_locked,
         )
     with col_reset:
         if st.button("Reset score", use_container_width=True, key="mbe_reset_btn"):
@@ -596,6 +653,7 @@ with tab_cmp:
         ],
         horizontal=True,
         key="cmp_mode",
+        disabled=_locked,
         help=(
             "Section by section: write each I/R/A/C field individually with tips and word counts. "
             "Paste whole: drop in an IRAC you wrote elsewhere as one block of text. "
@@ -613,6 +671,7 @@ with tab_cmp:
     with col_hypo_cmp:
         if st.button("⚡ Generate hypo", key="hypo_cmp",
                      use_container_width=True,
+                     disabled=_locked,
                      help="Have the AI write a fresh single-issue hypo in this area."):
             try:
                 with st.spinner("Drafting a fresh hypo..."):
@@ -628,6 +687,7 @@ with tab_cmp:
 
     facts_cmp = st.text_area(
         "Facts", height=110, key="facts_cmp",
+        disabled=_locked,
         placeholder="Paste the hypo facts here, or click ⚡ Generate hypo.",
     )
 
@@ -650,11 +710,12 @@ with tab_cmp:
             with col_i_hdr:
                 st.markdown("**I — Issue**")
             with col_i_btn:
-                if st.button("Template", key="tpl_i", use_container_width=True):
+                if st.button("Template", key="tpl_i", use_container_width=True, disabled=_locked):
                     st.session_state["s_issue"] = C.starter_template("issue")
                     st.rerun()
             student_issue = st.text_area(
                 "Issue", height=110, label_visibility="collapsed", key="s_issue",
+                disabled=_locked,
                 placeholder="Whether ... given ...",
             )
             C.word_count_bar(student_issue, "issue")
@@ -664,11 +725,12 @@ with tab_cmp:
             with col_r_hdr:
                 st.markdown("**R — Rule**")
             with col_r_btn:
-                if st.button("Template", key="tpl_r", use_container_width=True):
+                if st.button("Template", key="tpl_r", use_container_width=True, disabled=_locked):
                     st.session_state["s_rule"] = C.starter_template("rule")
                     st.rerun()
             student_rule = st.text_area(
                 "Rule", height=110, label_visibility="collapsed", key="s_rule",
+                disabled=_locked,
                 placeholder="Under [statute/case], the rule requires...",
             )
             C.word_count_bar(student_rule, "rule")
@@ -679,11 +741,12 @@ with tab_cmp:
             with col_a_hdr:
                 st.markdown("**A — Application**")
             with col_a_btn:
-                if st.button("Template", key="tpl_a", use_container_width=True):
+                if st.button("Template", key="tpl_a", use_container_width=True, disabled=_locked):
                     st.session_state["s_app"] = C.starter_template("application")
                     st.rerun()
             student_app = st.text_area(
                 "Application", height=200, label_visibility="collapsed", key="s_app",
+                disabled=_locked,
                 placeholder="Element 1: ...\nElement 2: ...",
             )
             C.word_count_bar(student_app, "application")
@@ -693,11 +756,12 @@ with tab_cmp:
             with col_c_hdr:
                 st.markdown("**C — Conclusion**")
             with col_c_btn:
-                if st.button("Template", key="tpl_c", use_container_width=True):
+                if st.button("Template", key="tpl_c", use_container_width=True, disabled=_locked):
                     st.session_state["s_conc"] = C.starter_template("conclusion")
                     st.rerun()
             student_conc = st.text_area(
                 "Conclusion", height=200, label_visibility="collapsed", key="s_conc",
+                disabled=_locked,
                 placeholder="Therefore, ...",
             )
             C.word_count_bar(student_conc, "conclusion")
@@ -713,6 +777,7 @@ with tab_cmp:
             height=320,
             label_visibility="collapsed",
             key="s_full",
+            disabled=_locked,
             placeholder=(
                 "Issue: ...\n"
                 "Rule: ...\n"
@@ -724,6 +789,7 @@ with tab_cmp:
     cmp_btn = st.button(
         "Generate AI IRAC + Get Feedback",
         type="primary", use_container_width=True,
+        disabled=_locked,
     )
 
     if cmp_btn:
@@ -858,6 +924,7 @@ with tab_essay:
     with col_hypo_essay:
         if st.button("⚡ Generate hypo", key="hypo_essay",
                      use_container_width=True,
+                     disabled=_locked,
                      help="Have the AI write a fresh bar-exam-length hypo in this area."):
             try:
                 with st.spinner("Drafting a comprehensive hypo..."):
@@ -870,12 +937,14 @@ with tab_essay:
         "Facts",
         height=180,
         key="facts_essay",
+        disabled=_locked,
         placeholder="Paste the multi-issue fact pattern here, or click ⚡ Generate hypo.",
     )
     essay_text = st.text_area(
         "Your essay",
         height=380,
         key="essay_text",
+        disabled=_locked,
         placeholder=(
             "Paste your full essay. Address each issue you spot with full IRAC "
             "(Issue, Rule, Application, Conclusion). Section labels help but aren't required."
@@ -883,7 +952,8 @@ with tab_essay:
     )
 
     essay_btn = st.button(
-        "Grade my essay", type="primary", use_container_width=True, key="essay_btn",
+        "Grade my essay", type="primary", use_container_width=True,
+        key="essay_btn", disabled=_locked,
     )
 
     if essay_btn:
@@ -942,10 +1012,12 @@ with tab_soc:
         col_soc_f, col_soc_btn = st.columns([3, 1])
         with col_soc_f:
             soc_facts = st.text_area("Facts", height=160, key="soc_facts_input",
+                                      disabled=_locked,
                                       placeholder="Paste the hypo facts here...")
         with col_soc_btn:
             st.markdown("<br>", unsafe_allow_html=True)
-            start_btn = st.button("Start Session", type="primary", use_container_width=True)
+            start_btn = st.button("Start Session", type="primary",
+                                  use_container_width=True, disabled=_locked)
 
         if start_btn:
             if not soc_facts.strip():
