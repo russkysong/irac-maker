@@ -8,6 +8,7 @@ import outlines
 import history
 from irac_engine import (
     compare_irac, grade_issue_spot, grade_essay, generate_mbe_question,
+    generate_hypo,
     socratic_next_question, check_model_ready, AREAS_OF_LAW,
 )
 from export import export_to_pdf
@@ -303,15 +304,27 @@ with tab_spot:
 """, unsafe_allow_html=True)
 
     _area_spot = st.session_state.get("area_spot_value") or st.session_state.get("last_area") or "Contracts"
-    if st.button(f"⚖️ Area of Law: {_area_spot}", key="btn_area_spot"):
-        C.pick_area_dialog("area_spot_value")
+    col_area_spot, col_hypo_spot = st.columns([3, 1])
+    with col_area_spot:
+        if st.button(f"⚖️ Area of Law: {_area_spot}", key="btn_area_spot"):
+            C.pick_area_dialog("area_spot_value")
     area_spot = _area_spot
+    with col_hypo_spot:
+        if st.button("⚡ Generate hypo", key="hypo_spot",
+                     use_container_width=True,
+                     help="Have the AI write a fresh fact pattern in this area."):
+            try:
+                with st.spinner("Drafting a fresh hypo..."):
+                    st.session_state["facts_spot"] = generate_hypo(area_spot, "Multi-issue")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Couldn't draft hypo: {e}")
 
     facts_spot = st.text_area(
         "Facts",
         height=200,
         key="facts_spot",
-        placeholder="Paste the fact pattern here...",
+        placeholder="Paste the fact pattern here, or click ⚡ Generate hypo.",
     )
     issues_spot = st.text_area(
         "Issues you spotted (one per line)",
@@ -521,13 +534,30 @@ with tab_cmp:
     is_paste = cmp_mode == "Paste my whole IRAC as one block"
 
     _area_cmp = st.session_state.get("area_cmp_value") or st.session_state.last_area
-    if st.button(f"⚖️ Area of Law: {_area_cmp}", key="btn_area_cmp"):
-        C.pick_area_dialog("area_cmp_value")
+    col_area_cmp, col_hypo_cmp = st.columns([3, 1])
+    with col_area_cmp:
+        if st.button(f"⚖️ Area of Law: {_area_cmp}", key="btn_area_cmp"):
+            C.pick_area_dialog("area_cmp_value")
     area_cmp = _area_cmp
+    with col_hypo_cmp:
+        if st.button("⚡ Generate hypo", key="hypo_cmp",
+                     use_container_width=True,
+                     help="Have the AI write a fresh single-issue hypo in this area."):
+            try:
+                with st.spinner("Drafting a fresh hypo..."):
+                    st.session_state["facts_cmp"] = generate_hypo(area_cmp, "Single issue")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Couldn't draft hypo: {e}")
+
+    # First-render-only seed from cross-tab handoff. After that, Streamlit owns
+    # session_state["facts_cmp"] — both via user typing and via the hypo button.
+    if "facts_cmp" not in st.session_state:
+        st.session_state["facts_cmp"] = st.session_state.last_facts
+
     facts_cmp = st.text_area(
         "Facts", height=110, key="facts_cmp",
-        value=st.session_state.last_facts,
-        placeholder="Paste the hypo facts here...",
+        placeholder="Paste the hypo facts here, or click ⚡ Generate hypo.",
     )
 
     # Defaults so the variables exist regardless of branch taken.
@@ -749,15 +779,27 @@ with tab_essay:
 """, unsafe_allow_html=True)
 
     _area_essay = st.session_state.get("area_essay_value") or st.session_state.get("last_area") or "Contracts"
-    if st.button(f"⚖️ Area of Law: {_area_essay}", key="btn_area_essay"):
-        C.pick_area_dialog("area_essay_value")
+    col_area_essay, col_hypo_essay = st.columns([3, 1])
+    with col_area_essay:
+        if st.button(f"⚖️ Area of Law: {_area_essay}", key="btn_area_essay"):
+            C.pick_area_dialog("area_essay_value")
     area_essay = _area_essay
+    with col_hypo_essay:
+        if st.button("⚡ Generate hypo", key="hypo_essay",
+                     use_container_width=True,
+                     help="Have the AI write a fresh bar-exam-length hypo in this area."):
+            try:
+                with st.spinner("Drafting a comprehensive hypo..."):
+                    st.session_state["facts_essay"] = generate_hypo(area_essay, "Comprehensive")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Couldn't draft hypo: {e}")
 
     facts_essay = st.text_area(
         "Facts",
         height=180,
         key="facts_essay",
-        placeholder="Paste the multi-issue fact pattern here...",
+        placeholder="Paste the multi-issue fact pattern here, or click ⚡ Generate hypo.",
     )
     essay_text = st.text_area(
         "Your essay",
@@ -1249,6 +1291,12 @@ with tab_about:
         <div class="section-label" style="color:#788c5d;">Issue Spotting</div>
         <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
             Drill-style: paste a hypo, list every issue you can spot, get scored on coverage. Faster feedback than writing a full IRAC.
+        </div>
+    </div>
+    <div class="irac-card" style="padding:16px 18px;border-left:3px solid #d97757;">
+        <div class="section-label">⚡ Generate hypo</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            A button on Issue Spotting, Long Essay, and Compare & Feedback that has the AI write a fresh fact pattern for the area you've picked. Fills the facts box for you so you can drill against new hypos without finding your own.
         </div>
     </div>
     <div class="irac-card irac-card-blue" style="padding:16px 18px;">

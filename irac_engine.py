@@ -353,6 +353,28 @@ Difficulty: {difficulty}
 Output ONLY valid JSON."""
 
 
+HYPO_SYSTEM = """You are a law professor writing an original fact pattern for a law school student to analyze.
+
+Style guide:
+- Bar-exam realism. Use ordinary names (Alice, Bob, Carol — or invent your own), specific dates, concrete dollar amounts, and named places.
+- Raise legal issues CLEARLY but never name them. Let the student spot the issues.
+- Hit core doctrine in the given area of law. Avoid trivia.
+- Single issue:   80-150 words, 1-2 issues.
+- Multi-issue:    200-400 words, 3-6 issues.
+- Comprehensive:  400-600 words, 5-8 issues, bar-exam length.
+
+Output ONLY the fact pattern as plain prose. No JSON. No bullet list of issues. No labels.
+Do NOT state the legal issues. Do NOT provide analysis. Just the facts."""
+
+
+HYPO_PROMPT = """Generate one original fact pattern.
+
+Area of Law: {area}
+Complexity: {complexity}
+
+Fact pattern (plain prose only):"""
+
+
 # ── functions ──────────────────────────────────────────────────────────────────
 
 def _chat(system: str | None, user: str, use_json: bool = True) -> dict:
@@ -589,6 +611,26 @@ def compare_irac(
         )
     resp = _chat(FEEDBACK_SYSTEM, prompt, use_json=True)
     return IRACFeedback(**json.loads(resp["message"]["content"]))
+
+
+def generate_hypo(area: str = "Contracts", complexity: str = "Multi-issue") -> str:
+    """Generate one fresh fact pattern. Returns plain text — no JSON wrapper.
+
+    `complexity` is one of: "Single issue", "Multi-issue", "Comprehensive".
+    The system prompt maps each to a target word count and issue count.
+    """
+    prompt = HYPO_PROMPT.format(area=area, complexity=complexity)
+    resp = ollama.chat(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": HYPO_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+        options={"num_predict": 1500},
+        keep_alive=_KEEP_ALIVE,
+        think=False,
+    )
+    return resp["message"]["content"].strip()
 
 
 def generate_mbe_question(area: str = "Contracts", difficulty: str = "Medium") -> MBEQuestion:
