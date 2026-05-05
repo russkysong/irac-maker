@@ -183,17 +183,46 @@ if st.session_state.get("current_topic") and st.session_state["current_topic"] n
 top_gen, top_practice, top_library = st.tabs(["Generate", "Practice", "Library"])
 
 with top_gen:
+    st.markdown(
+        '<div style="font-family:Lora,serif;font-size:13.5px;color:#b0aea5;'
+        'line-height:1.55;margin:0.4rem 0 0.9rem 0;">'
+        '<strong style="color:#e8e6dc;">Generate</strong> — '
+        "the AI does the analysis for you. Paste a fact pattern or a "
+        "court opinion and get a structured IRAC, case brief, or "
+        "side-by-side plaintiff/defendant arguments."
+        "</div>",
+        unsafe_allow_html=True,
+    )
     tab_gen, tab_brief, tab_both = st.tabs([
         "IRAC", "Case Brief", "Both Sides",
     ])
 
 with top_practice:
+    st.markdown(
+        '<div style="font-family:Lora,serif;font-size:13.5px;color:#b0aea5;'
+        'line-height:1.55;margin:0.4rem 0 0.9rem 0;">'
+        '<strong style="color:#e8e6dc;">Practice</strong> — '
+        "you do the work, the AI grades or guides you. Spotter drills, "
+        "MBE-style multiple choice, full-essay grading, single-IRAC "
+        "compare, and Socratic dialogue."
+        "</div>",
+        unsafe_allow_html=True,
+    )
     tab_spot, tab_mbe, tab_cmp, tab_essay, tab_soc = st.tabs([
         "Issue Spotting", "MBE Practice", "Compare & Feedback",
         "Long Essay", "Socratic Mode",
     ])
 
 with top_library:
+    st.markdown(
+        '<div style="font-family:Lora,serif;font-size:13.5px;color:#b0aea5;'
+        'line-height:1.55;margin:0.4rem 0 0.9rem 0;">'
+        '<strong style="color:#e8e6dc;">Library</strong> — '
+        "your stuff. Upload your own outlines, browse the history of "
+        "everything you've generated, or read the About page."
+        "</div>",
+        unsafe_allow_html=True,
+    )
     tab_outlines, tab_history, tab_about = st.tabs([
         "My Outlines", "History", "About",
     ])
