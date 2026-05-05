@@ -569,13 +569,20 @@ def _build_generate_prompt(facts: str, area: str, outline_source: str = "default
         except Exception:
             extras = ""
     elif outline_source == "default":
+        # Use the cached built-in outline IF it already exists. Do NOT
+        # trigger a 30-60s on-demand generation here — that would block the
+        # IRAC stream's first token by ~45s with no UI feedback ("Starting..."
+        # frozen on the progress card). The user explicitly generates each
+        # area's outline from the My Outlines tab, where progress is shown.
+        # Cache miss = silent fallthrough to no-context generation.
         try:
             import default_outlines as _do
-            extras = _do.get_or_generate(area)
-            # Cap the inject — built-in outlines target ~1200 words but the
-            # LLM occasionally overshoots, and ctx_size is 4096 in Modelfile.
-            if extras and len(extras) > 6000:
-                extras = extras[:6000] + "\n[…truncated…]"
+            if _do.exists(area):
+                extras = _do.load(area)
+                # Cap the inject — built-in outlines target ~1200 words but the
+                # LLM occasionally overshoots, and ctx_size is 4096 in Modelfile.
+                if extras and len(extras) > 6000:
+                    extras = extras[:6000] + "\n[…truncated…]"
         except Exception:
             extras = ""
 

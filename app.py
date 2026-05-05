@@ -1318,6 +1318,41 @@ with tab_outlines:
         label_visibility="collapsed",
     )
 
+    # Inline status — tell the user exactly what's wired up right now so
+    # picking "Built-in" doesn't silently fall through to "None" when the
+    # outlines for their current area haven't been generated yet.
+    import default_outlines as _do_status
+    _selected_source = st.session_state.get("outline_source", "default")
+    if _selected_source == "default":
+        _ready_count = sum(1 for a in AREAS_OF_LAW if _do_status.exists(a))
+        _curr = _safe_area(st.session_state.get("current_area"))
+        _curr_ready = _do_status.exists(_curr)
+        _curr_marker = "✓ ready" if _curr_ready else "not yet generated"
+        _curr_color = "#788c5d" if _curr_ready else "#d97757"
+        st.markdown(
+            f'<div style="font-family:Lora,serif;font-size:13px;color:#b0aea5;'
+            f'margin-top:4px;line-height:1.55;">'
+            f'<strong style="color:#faf9f5;">{_ready_count}/{len(AREAS_OF_LAW)}</strong> '
+            f"areas have built-in outlines cached. Current area "
+            f'<strong style="color:#faf9f5;">{html.escape(_curr)}</strong>: '
+            f'<span style="color:{_curr_color};font-weight:600;">{_curr_marker}</span>. '
+            f'Areas without a cached outline fall through to no extra context — '
+            f"generate them below to use this mode."
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    elif _selected_source == "mine":
+        _outline_count = len(outlines.load_index())
+        st.markdown(
+            f'<div style="font-family:Lora,serif;font-size:13px;color:#b0aea5;'
+            f'margin-top:4px;line-height:1.55;">'
+            f'<strong style="color:#faf9f5;">{_outline_count}</strong> '
+            f"outline file{'s' if _outline_count != 1 else ''} uploaded. "
+            f"Excerpts matched to your facts will be injected into IRAC prompts."
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
     st.divider()
 
     # ── Built-in outlines (AI-generated, cached forever) ──────────────────────
