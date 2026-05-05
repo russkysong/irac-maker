@@ -3,6 +3,43 @@ import streamlit as st
 from models import IRRACOutput
 
 
+# ── Topic modal picker (sub-topic within an area of law) ──────────────────────
+@st.dialog("Pick Topic")
+def pick_topic_dialog(area: str, state_key: str = "current_topic"):
+    """Modal picker for a sub-topic within the given area of law.
+
+    Topics come from irac_engine.AREA_TOPICS[area]. "(any)" means leave the
+    hypo unscoped — the LLM picks a topic on its own. We store the empty
+    string in session_state for "(any)" to keep the downstream API simple
+    (truthy = anchored to a specific topic).
+    """
+    from irac_engine import AREA_TOPICS
+    topics = AREA_TOPICS.get(area, [])
+    options = ["(any)"] + topics
+    raw = st.session_state.get(state_key) or ""
+    current = raw if raw in topics else "(any)"
+
+    selected = st.pills(
+        "Topic", options,
+        default=current,
+        key=f"_dialog_topic_pills_{state_key}",
+        label_visibility="collapsed",
+    )
+    if selected and selected != current:
+        st.session_state[state_key] = "" if selected == "(any)" else selected
+        st.rerun()
+
+    # Confirm-default fallback (matches pick_area_dialog pattern).
+    if st.button(
+        f"Use this topic ({current})",
+        type="primary",
+        use_container_width=True,
+        key=f"_dialog_topic_confirm_{state_key}",
+    ):
+        st.session_state[state_key] = "" if current == "(any)" else current
+        st.rerun()
+
+
 # ── Area-of-Law modal picker ──────────────────────────────────────────────────
 @st.dialog("Pick Area of Law")
 def pick_area_dialog(state_key: str, default: str = "Contracts"):

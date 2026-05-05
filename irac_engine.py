@@ -33,6 +33,127 @@ AREAS_OF_LAW = [
     "Professional Responsibility",
 ]
 
+# Frequently-tested sub-topics within each area (MEE/MBE focus). Used by the
+# Hypo Generator and (later) MBE Practice to scope the fact pattern. Keeping
+# the lists short — a topic should be specific enough to anchor a single
+# essay/question but broad enough that the LLM has room to write a real hypo.
+AREA_TOPICS = {
+    "Business Associations": [
+        "Agency",
+        "General Partnership",
+        "Limited Partnership / LLP",
+        "Corporation: Formation & Promoters",
+        "Corporation: Director & Officer Duties",
+        "Corporation: Shareholder Rights & Derivative Suits",
+        "Corporation: Piercing the Corporate Veil",
+        "Corporation: Mergers & Dissolution",
+        "Limited Liability Company (LLC)",
+    ],
+    "Contracts": [
+        "Offer & Acceptance",
+        "Consideration & Promissory Estoppel",
+        "Defenses to Formation",
+        "Statute of Frauds",
+        "Performance & Breach",
+        "Remedies & Damages",
+        "UCC Article 2 (Sales)",
+        "Third-Party Rights & Assignment",
+    ],
+    "Torts": [
+        "Intentional Torts",
+        "Negligence",
+        "Strict Liability",
+        "Products Liability",
+        "Defamation",
+        "Privacy Torts",
+        "Vicarious Liability",
+        "Damages & Defenses",
+    ],
+    "Constitutional Law": [
+        "Justiciability (Standing, Ripeness, Mootness)",
+        "Federalism & Commerce Clause",
+        "Separation of Powers",
+        "Procedural Due Process",
+        "Substantive Due Process",
+        "Equal Protection",
+        "First Amendment: Speech",
+        "First Amendment: Religion",
+        "Takings",
+    ],
+    "Criminal Law": [
+        "Actus Reus & Mens Rea",
+        "Homicide",
+        "Inchoate Crimes (Attempt, Solicitation, Conspiracy)",
+        "Accomplice Liability",
+        "Property Crimes",
+        "Defenses (Self-Defense, Insanity, Duress, etc.)",
+    ],
+    "Criminal Procedure": [
+        "Fourth Amendment: Search & Seizure",
+        "Fourth Amendment: Warrants & Exceptions",
+        "Fifth Amendment: Self-Incrimination & Miranda",
+        "Sixth Amendment: Right to Counsel",
+        "Identification Procedures",
+        "Exclusionary Rule",
+    ],
+    "Property": [
+        "Estates in Land",
+        "Future Interests",
+        "Concurrent Estates (JT, TIC, TBE)",
+        "Landlord-Tenant",
+        "Real Property Sales (Contract & Deed)",
+        "Easements, Covenants, Equitable Servitudes",
+        "Adverse Possession",
+        "Mortgages",
+        "Recording & Title",
+    ],
+    "Civil Procedure": [
+        "Subject Matter Jurisdiction",
+        "Personal Jurisdiction",
+        "Venue & Removal",
+        "Erie Doctrine & Choice of Law",
+        "Pleadings & Motions",
+        "Discovery",
+        "Summary Judgment & Trial",
+        "Joinder & Class Actions",
+        "Preclusion (Res Judicata, Collateral Estoppel)",
+    ],
+    "Evidence": [
+        "Relevance (FRE 401-403)",
+        "Hearsay & Exceptions",
+        "Character Evidence",
+        "Impeachment",
+        "Privileges",
+        "Authentication & Best Evidence",
+        "Expert & Lay Opinion",
+    ],
+    "Administrative Law": [
+        "Rulemaking Procedures",
+        "Adjudication & Due Process",
+        "Judicial Review (Standing, Ripeness)",
+        "Chevron / Skidmore Deference",
+        "Delegation Doctrine",
+    ],
+    "Family Law": [
+        "Marriage & Premarital Agreements",
+        "Divorce Grounds",
+        "Property Distribution",
+        "Spousal Support / Alimony",
+        "Child Custody",
+        "Child Support",
+        "Adoption & Termination of Parental Rights",
+    ],
+    "Professional Responsibility": [
+        "Conflicts of Interest",
+        "Confidentiality",
+        "Client Funds & Trust Accounts",
+        "Fees & Fee-Splitting",
+        "Candor Toward the Tribunal",
+        "Solicitation & Advertising",
+        "Reporting Misconduct",
+    ],
+}
+
 # ── prompts ────────────────────────────────────────────────────────────────────
 
 GENERATE_PROMPT = """Analyze this American law school hypo using IRREAC.
@@ -353,26 +474,36 @@ Difficulty: {difficulty}
 Output ONLY valid JSON."""
 
 
-HYPO_SYSTEM = """You are a law professor writing an original fact pattern for a law school student to analyze.
+HYPO_SYSTEM = """You are a law professor writing an original MEE-style (Multistate Essay Exam) fact pattern for a law school student.
 
 Style guide:
 - Bar-exam realism. Use ordinary names (Alice, Bob, Carol — or invent your own), specific dates, concrete dollar amounts, and named places.
-- Raise legal issues CLEARLY but never name them. Let the student spot the issues.
+- Raise legal issues CLEARLY through the facts but NEVER name a legal doctrine in the narrative. The student must spot the issues from the facts.
 - Hit core doctrine in the given area of law. Avoid trivia.
-- Single issue:   80-150 words, 1-2 issues.
-- Multi-issue:    200-400 words, 3-6 issues.
-- Comprehensive:  400-600 words, 5-8 issues, bar-exam length.
+- If a TOPIC is specified, anchor the fact pattern firmly within that topic. Other areas may incidentally arise but the dominant issues must come from the named topic.
+- Word counts:
+    Single issue:   80-150 words, 1-2 issues.
+    Multi-issue:    200-400 words, 3-6 issues.
+    Comprehensive:  400-600 words, 5-8 issues, bar-exam length.
 
-Output ONLY the fact pattern as plain prose. No JSON. No bullet list of issues. No labels.
-Do NOT state the legal issues. Do NOT provide analysis. Just the facts."""
+If a "Call of question" should be included, append it on a new paragraph at the end, prefixed exactly with **Question:** (markdown bold). Use OPEN-ENDED phrasing — never name the doctrine. Examples:
+  • "**Question:** What rights and remedies do the parties have? Discuss."
+  • "**Question:** How should the court rule on each of Alice's claims?"
+  • "**Question:** Discuss all defenses available to Bob."
+
+If "no call" is requested, output ONLY the fact pattern with no question and no labels.
+
+Output is plain prose with markdown bold for the optional Question line. NO JSON. NO bullet list of issues. NO analysis. NO topic header."""
 
 
-HYPO_PROMPT = """Generate one original fact pattern.
+HYPO_PROMPT = """Generate one original MEE-style fact pattern.
 
-Area of Law: {area}
-Complexity: {complexity}
+Area of Law:   {area}
+{topic_line}
+Complexity:    {complexity}
+Call of question: {call}
 
-Fact pattern (plain prose only):"""
+Fact pattern (plain prose only{call_hint}):"""
 
 
 DEFAULT_OUTLINE_SYSTEM = """You are writing a concise rule-reference outline for an American law school student.
@@ -677,13 +808,37 @@ def generate_default_outline(area: str) -> str:
     return resp["message"]["content"].strip()
 
 
-def generate_hypo(area: str = "Contracts", complexity: str = "Multi-issue") -> str:
-    """Generate one fresh fact pattern. Returns plain text — no JSON wrapper.
+def generate_hypo(
+    area: str = "Contracts",
+    complexity: str = "Multi-issue",
+    topic: str = "",
+    include_call: bool = True,
+) -> str:
+    """Generate one fresh MEE-style fact pattern. Plain text — no JSON wrapper.
 
-    `complexity` is one of: "Single issue", "Multi-issue", "Comprehensive".
-    The system prompt maps each to a target word count and issue count.
+    Parameters
+    ----------
+    area : str
+        One of AREAS_OF_LAW.
+    complexity : str
+        "Single issue" | "Multi-issue" | "Comprehensive". Maps to target word
+        count and issue count via the system prompt.
+    topic : str
+        Optional sub-topic from AREA_TOPICS[area]. Empty string means
+        "any topic in the area". When provided, the LLM anchors the hypo
+        firmly within that topic.
+    include_call : bool
+        When True (Long Essay / Compare), the fact pattern ends with a
+        **Question:** call-of-question paragraph. When False (Issue
+        Spotting), only the facts — preserves the spotter exercise.
     """
-    prompt = HYPO_PROMPT.format(area=area, complexity=complexity)
+    topic_line = f"Topic:         {topic}" if topic else "Topic:         (any in this area)"
+    call = "Yes — include MEE-style **Question:** paragraph at the end." if include_call else "No — facts only, no question."
+    call_hint = "" if include_call else ", facts only — no Question line"
+    prompt = HYPO_PROMPT.format(
+        area=area, topic_line=topic_line, complexity=complexity,
+        call=call, call_hint=call_hint,
+    )
     resp = ollama.chat(
         model=MODEL_NAME,
         messages=[

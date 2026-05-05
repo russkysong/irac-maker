@@ -86,6 +86,10 @@ DEFAULTS = {
     # "mine" = uploaded files, "default" = built-in AI-generated outlines,
     # "none" = no context, LLM uses its own training knowledge.
     "outline_source": "default",
+    # Current topic within current_area for hypo generation. Empty string
+    # means "(any)" — the LLM picks a topic. Auto-resets when current_area
+    # changes (see the validity guard right after the prefs hydrate block).
+    "current_topic": "",
     "socratic_history": [], "socratic_facts": "", "socratic_area": "Contracts",
     "socratic_started": False,
     # MBE Practice state
@@ -158,6 +162,15 @@ if _locked:
         ):
             C.pick_area_dialog("current_area")
     st.divider()
+
+# ── Topic validity guard ──────────────────────────────────────────────────────
+# If the user picks a new area, their previously-set topic may no longer be
+# valid (e.g. "Agency" is a Business Associations topic but not a Torts topic).
+# Reset current_topic in that case so the topic chip falls back to "(any)".
+from irac_engine import AREA_TOPICS as _AREA_TOPICS
+_active_area_topics = _AREA_TOPICS.get(st.session_state.get("current_area", ""), [])
+if st.session_state.get("current_topic") and st.session_state["current_topic"] not in _active_area_topics:
+    st.session_state["current_topic"] = ""
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 # Two-level structure: 3 category tabs at the top, sub-tabs inside each.
@@ -422,10 +435,23 @@ with tab_spot:
 """, unsafe_allow_html=True)
 
     _area_spot = _safe_area(st.session_state.get("current_area"))
-    col_area_spot, col_hypo_spot = st.columns([3, 1])
+    _topic_spot = st.session_state.get("current_topic") or ""
+    _topic_label_spot = _topic_spot if _topic_spot else "(any)"
+    _has_topics_spot = bool(_AREA_TOPICS.get(_area_spot))
+    col_area_spot, col_topic_spot, col_hypo_spot = st.columns([2, 2, 1])
     with col_area_spot:
-        if st.button(f"⚖️ Area of Law: {_area_spot}", key="btn_area_spot"):
+        if st.button(f"⚖️ Area: {_area_spot}", key="btn_area_spot",
+                     use_container_width=True):
             C.pick_area_dialog("current_area")
+    with col_topic_spot:
+        if st.button(
+            f"🏷 Topic: {_topic_label_spot}",
+            key="btn_topic_spot",
+            use_container_width=True,
+            disabled=_locked or not _has_topics_spot,
+            help="Pick a sub-topic to anchor the hypo (optional)." if _has_topics_spot else "No sub-topics defined for this area.",
+        ):
+            C.pick_topic_dialog(_area_spot, "current_topic")
     area_spot = _area_spot
     with col_hypo_spot:
         if st.button("⚡ Generate hypo", key="hypo_spot",
@@ -434,7 +460,11 @@ with tab_spot:
                      help="Have the AI write a fresh fact pattern in this area."):
             try:
                 with st.spinner("Drafting a fresh hypo..."):
-                    st.session_state["facts_spot"] = generate_hypo(area_spot, "Multi-issue")
+                    # Issue Spotting: no call-of-question (would hint at issues).
+                    st.session_state["facts_spot"] = generate_hypo(
+                        area_spot, "Multi-issue",
+                        topic=_topic_spot, include_call=False,
+                    )
                 st.rerun()
             except Exception as e:
                 st.error(f"Couldn't draft hypo: {e}")
@@ -667,10 +697,23 @@ with tab_cmp:
     is_paste = cmp_mode == "Paste my whole IRAC as one block"
 
     _area_cmp = _safe_area(st.session_state.get("current_area"))
-    col_area_cmp, col_hypo_cmp = st.columns([3, 1])
+    _topic_cmp = st.session_state.get("current_topic") or ""
+    _topic_label_cmp = _topic_cmp if _topic_cmp else "(any)"
+    _has_topics_cmp = bool(_AREA_TOPICS.get(_area_cmp))
+    col_area_cmp, col_topic_cmp, col_hypo_cmp = st.columns([2, 2, 1])
     with col_area_cmp:
-        if st.button(f"⚖️ Area of Law: {_area_cmp}", key="btn_area_cmp"):
+        if st.button(f"⚖️ Area: {_area_cmp}", key="btn_area_cmp",
+                     use_container_width=True):
             C.pick_area_dialog("current_area")
+    with col_topic_cmp:
+        if st.button(
+            f"🏷 Topic: {_topic_label_cmp}",
+            key="btn_topic_cmp",
+            use_container_width=True,
+            disabled=_locked or not _has_topics_cmp,
+            help="Pick a sub-topic to anchor the hypo (optional)." if _has_topics_cmp else "No sub-topics defined for this area.",
+        ):
+            C.pick_topic_dialog(_area_cmp, "current_topic")
     area_cmp = _area_cmp
     with col_hypo_cmp:
         if st.button("⚡ Generate hypo", key="hypo_cmp",
@@ -679,7 +722,11 @@ with tab_cmp:
                      help="Have the AI write a fresh single-issue hypo in this area."):
             try:
                 with st.spinner("Drafting a fresh hypo..."):
-                    st.session_state["facts_cmp"] = generate_hypo(area_cmp, "Single issue")
+                    # Compare: include MEE-style **Question:** call.
+                    st.session_state["facts_cmp"] = generate_hypo(
+                        area_cmp, "Single issue",
+                        topic=_topic_cmp, include_call=True,
+                    )
                 st.rerun()
             except Exception as e:
                 st.error(f"Couldn't draft hypo: {e}")
@@ -920,10 +967,23 @@ with tab_essay:
 """, unsafe_allow_html=True)
 
     _area_essay = _safe_area(st.session_state.get("current_area"))
-    col_area_essay, col_hypo_essay = st.columns([3, 1])
+    _topic_essay = st.session_state.get("current_topic") or ""
+    _topic_label_essay = _topic_essay if _topic_essay else "(any)"
+    _has_topics_essay = bool(_AREA_TOPICS.get(_area_essay))
+    col_area_essay, col_topic_essay, col_hypo_essay = st.columns([2, 2, 1])
     with col_area_essay:
-        if st.button(f"⚖️ Area of Law: {_area_essay}", key="btn_area_essay"):
+        if st.button(f"⚖️ Area: {_area_essay}", key="btn_area_essay",
+                     use_container_width=True):
             C.pick_area_dialog("current_area")
+    with col_topic_essay:
+        if st.button(
+            f"🏷 Topic: {_topic_label_essay}",
+            key="btn_topic_essay",
+            use_container_width=True,
+            disabled=_locked or not _has_topics_essay,
+            help="Pick a sub-topic to anchor the hypo (optional)." if _has_topics_essay else "No sub-topics defined for this area.",
+        ):
+            C.pick_topic_dialog(_area_essay, "current_topic")
     area_essay = _area_essay
     with col_hypo_essay:
         if st.button("⚡ Generate hypo", key="hypo_essay",
@@ -932,7 +992,11 @@ with tab_essay:
                      help="Have the AI write a fresh bar-exam-length hypo in this area."):
             try:
                 with st.spinner("Drafting a comprehensive hypo..."):
-                    st.session_state["facts_essay"] = generate_hypo(area_essay, "Comprehensive")
+                    # Long Essay: include MEE-style **Question:** call.
+                    st.session_state["facts_essay"] = generate_hypo(
+                        area_essay, "Comprehensive",
+                        topic=_topic_essay, include_call=True,
+                    )
                 st.rerun()
             except Exception as e:
                 st.error(f"Couldn't draft hypo: {e}")
