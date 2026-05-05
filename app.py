@@ -459,12 +459,26 @@ with tab_spot:
                      disabled=_locked,
                      help="Have the AI write a fresh fact pattern in this area."):
             try:
-                with st.spinner("Drafting a fresh hypo..."):
-                    # Issue Spotting: no call-of-question (would hint at issues).
-                    st.session_state["facts_spot"] = generate_hypo(
-                        area_spot, "Multi-issue",
-                        topic=_topic_spot, include_call=False,
-                    )
+                # Issue Spotting: no call-of-question (would hint at issues).
+                _spot_hypo_phase = (
+                    f"Drafting a {_topic_spot} hypo" if _topic_spot
+                    else f"Drafting a {area_spot} hypo"
+                )
+                st.session_state["facts_spot"] = C.run_with_time_progress(
+                    generate_hypo,
+                    phase=_spot_hypo_phase,
+                    est_seconds=25,
+                    sublabels=[
+                        (0,  "Picking a doctrine within the topic..."),
+                        (25, "Inventing parties, dates, and facts..."),
+                        (55, "Layering in legal triggers..."),
+                        (80, "Polishing the prose..."),
+                    ],
+                    area=area_spot,
+                    complexity="Multi-issue",
+                    topic=_topic_spot,
+                    include_call=False,
+                )
                 st.rerun()
             except Exception as e:
                 st.error(f"Couldn't draft hypo: {e}")
@@ -721,12 +735,26 @@ with tab_cmp:
                      disabled=_locked,
                      help="Have the AI write a fresh single-issue hypo in this area."):
             try:
-                with st.spinner("Drafting a fresh hypo..."):
-                    # Compare: include MEE-style **Question:** call.
-                    st.session_state["facts_cmp"] = generate_hypo(
-                        area_cmp, "Single issue",
-                        topic=_topic_cmp, include_call=True,
-                    )
+                # Compare: include MEE-style **Question:** call.
+                _cmp_hypo_phase = (
+                    f"Drafting a {_topic_cmp} hypo" if _topic_cmp
+                    else f"Drafting a {area_cmp} hypo"
+                )
+                st.session_state["facts_cmp"] = C.run_with_time_progress(
+                    generate_hypo,
+                    phase=_cmp_hypo_phase,
+                    est_seconds=20,
+                    sublabels=[
+                        (0,  "Picking a doctrine within the topic..."),
+                        (30, "Inventing parties and facts..."),
+                        (60, "Layering in the legal trigger..."),
+                        (85, "Drafting the call of question..."),
+                    ],
+                    area=area_cmp,
+                    complexity="Single issue",
+                    topic=_topic_cmp,
+                    include_call=True,
+                )
                 st.rerun()
             except Exception as e:
                 st.error(f"Couldn't draft hypo: {e}")
@@ -991,12 +1019,27 @@ with tab_essay:
                      disabled=_locked,
                      help="Have the AI write a fresh bar-exam-length hypo in this area."):
             try:
-                with st.spinner("Drafting a comprehensive hypo..."):
-                    # Long Essay: include MEE-style **Question:** call.
-                    st.session_state["facts_essay"] = generate_hypo(
-                        area_essay, "Comprehensive",
-                        topic=_topic_essay, include_call=True,
-                    )
+                # Long Essay: include MEE-style **Question:** call.
+                _essay_hypo_phase = (
+                    f"Drafting a {_topic_essay} bar-length hypo" if _topic_essay
+                    else f"Drafting a {area_essay} bar-length hypo"
+                )
+                st.session_state["facts_essay"] = C.run_with_time_progress(
+                    generate_hypo,
+                    phase=_essay_hypo_phase,
+                    est_seconds=45,
+                    sublabels=[
+                        (0,  "Sketching the doctrinal arc..."),
+                        (20, "Inventing parties, dates, and dollar amounts..."),
+                        (45, "Weaving in 4–6 distinct legal issues..."),
+                        (70, "Layering in counter-arguments..."),
+                        (88, "Drafting the call of question..."),
+                    ],
+                    area=area_essay,
+                    complexity="Comprehensive",
+                    topic=_topic_essay,
+                    include_call=True,
+                )
                 st.rerun()
             except Exception as e:
                 st.error(f"Couldn't draft hypo: {e}")
@@ -1235,11 +1278,12 @@ with tab_outlines:
     if st.button("Add to my outlines", type="primary",
                  use_container_width=True, disabled=uploaded_file is None):
         try:
-            meta = outlines.add_outline(
-                filename=uploaded_file.name,
-                area=upload_area,
-                content=uploaded_file.getvalue(),
-            )
+            with st.spinner(f"Extracting text from {uploaded_file.name}..."):
+                meta = outlines.add_outline(
+                    filename=uploaded_file.name,
+                    area=upload_area,
+                    content=uploaded_file.getvalue(),
+                )
             st.success(f"Saved **{meta['filename']}** ({meta['char_count']:,} chars).")
             st.rerun()
         except ImportError:
@@ -1315,11 +1359,22 @@ with tab_outlines:
             if st.button(label, key=f"bo_btn_{_area_name}",
                          use_container_width=True):
                 try:
-                    with st.spinner(f"Drafting {_area_name} outline (~30–60s)..."):
-                        if _bo["exists"]:
-                            default_outlines.regenerate(_area_name)
-                        else:
-                            default_outlines.get_or_generate(_area_name)
+                    _gen_fn = (default_outlines.regenerate
+                               if _bo["exists"]
+                               else default_outlines.get_or_generate)
+                    C.run_with_time_progress(
+                        _gen_fn,
+                        _area_name,
+                        phase=f"Drafting {_area_name} outline",
+                        est_seconds=45,
+                        sublabels=[
+                            (0,  "Surveying core doctrines..."),
+                            (20, "Listing rules and citations..."),
+                            (45, "Adding majority/minority distinctions..."),
+                            (70, "Wiring in exceptions and defenses..."),
+                            (88, "Polishing the markdown..."),
+                        ],
+                    )
                     st.rerun()
                 except Exception as e:
                     st.error(f"Couldn't generate: {e}")
