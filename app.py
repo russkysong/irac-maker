@@ -39,16 +39,26 @@ def _safe_area(value, default: str = "Contracts") -> str:
 
 @st.cache_resource(show_spinner="Warming up the model…")
 def _model_ready_cached() -> bool:
-    """Check that the model exists AND force it into VRAM with a tiny call.
+    """Validate the active LLM provider and warm up the local model if applicable.
 
-    Without warm-up, the user's first real request pays the 10-30s model-load
-    cost with no UI feedback. With it, that cost is paid once during the
-    Streamlit "Loading…" spinner before the page even renders, and every
-    subsequent interaction (within keep_alive=30m) is instant.
+    Two paths:
+      • BYOK active (provider != "local" in saved prefs) — skip Ollama
+        entirely. The user might not even have Ollama installed. Trust their
+        Settings setup; bad keys will surface in `_xai_chat` with clear errors.
+      • Local Ollama — verify the model exists, then make a 4-token call to
+        force it into VRAM. Subsequent requests within keep_alive=30m are
+        instant instead of paying the cold-start cost on first user click.
 
     Cached via @st.cache_resource so this runs ONCE per session even though
     Streamlit reruns the whole script on every interaction.
     """
+    # Read prefs directly — session_state hasn't been hydrated yet at this
+    # point in the script's execution.
+    import preferences as _prefs_at_boot
+    _saved = _prefs_at_boot.load()
+    if _saved.get("byok_provider") == "xai" and _saved.get("byok_api_key"):
+        return True
+
     if not check_model_ready():
         return False
     try:
@@ -69,7 +79,12 @@ def _model_ready_cached() -> bool:
     return True
 
 if not _model_ready_cached():
-    st.error("**Model not found.** Run setup first:\n\n```bash\nbash setup.sh\n```", icon="🔴")
+    st.error(
+        "**Model not found.** Run setup first:\n\n```bash\nbash setup.sh\n```\n\n"
+        "Or, if you'd rather use a cloud LLM, configure BYOK in the Settings "
+        "tab (Library → Settings) after starting the app another way.",
+        icon="🔴",
+    )
     st.stop()
 
 # ── Session state ──────────────────────────────────────────────────────────────
@@ -95,6 +110,13 @@ DEFAULTS = {
     # MBE Practice state
     "mbe_question": None, "mbe_user_answer": None, "mbe_submitted": False,
     "mbe_correct_count": 0, "mbe_total_count": 0,
+    # ── BYOK (Bring Your Own Key) — all default to local Ollama ──
+    # Switching providers is opt-in via the Settings tab. The local
+    # privacy contract holds unless the user explicitly picks "xai".
+    "byok_provider": "local",      # "local" | "xai"
+    "byok_api_key": "",
+    "byok_base_url": "https://api.x.ai/v1",
+    "byok_model": "grok-4-fast-non-reasoning",
 }
 for k, v in DEFAULTS.items():
     if k not in st.session_state:
@@ -103,7 +125,10 @@ for k, v in DEFAULTS.items():
 # ── Persistent UI preferences ──────────────────────────────────────────────────
 # Load saved prefs and seed session_state for keys that aren't already set.
 # Saving happens via _persist_prefs() at the bottom of every script run.
-_PERSISTED_KEYS = ("current_area", "cmp_mode", "outline_source")
+_PERSISTED_KEYS = (
+    "current_area", "cmp_mode", "outline_source",
+    "byok_provider", "byok_api_key", "byok_base_url", "byok_model",
+)
 _saved_prefs = preferences.load()
 for _k in _PERSISTED_KEYS:
     if _k in _saved_prefs and _k not in st.session_state:
@@ -223,8 +248,8 @@ with top_library:
         "</div>",
         unsafe_allow_html=True,
     )
-    tab_outlines, tab_history, tab_about = st.tabs([
-        "My Outlines", "History", "About",
+    tab_outlines, tab_history, tab_settings, tab_about = st.tabs([
+        "My Outlines", "History", "Settings", "About",
     ])
 
 
@@ -488,7 +513,11 @@ with tab_spot:
                      disabled=_locked,
                      help="Have the AI write a fresh fact pattern in this area."):
             try:
-                # Issue Spotting: no call-of-question (would hint at issues).
+                # Issue Spotting: include the MEE-style **Question:** call so
+                # the hypo reads like a real exam prompt. The system prompt
+                # constrains calls to open-ended phrasing ("Discuss", "What
+                # rights..."), so it doesn't name the doctrines and doesn't
+                # cheat the issue-spotting exercise.
                 _spot_hypo_phase = (
                     f"Drafting a {_topic_spot} hypo" if _topic_spot
                     else f"Drafting a {area_spot} hypo"
@@ -501,12 +530,12 @@ with tab_spot:
                         (0,  "Picking a doctrine within the topic..."),
                         (25, "Inventing parties, dates, and facts..."),
                         (55, "Layering in legal triggers..."),
-                        (80, "Polishing the prose..."),
+                        (80, "Drafting the call of question..."),
                     ],
                     area=area_spot,
                     complexity="Multi-issue",
                     topic=_topic_spot,
-                    include_call=False,
+                    include_call=True,
                 )
                 st.rerun()
             except Exception as e:
@@ -1671,7 +1700,155 @@ with tab_history:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TAB 11 — ABOUT
+# TAB 11 — SETTINGS (BYOK)
+# ════════════════════════════════════════════════════════════════════════════════
+import llm_client
+
+with tab_settings:
+    st.markdown("""
+<div class="irac-card irac-card-accent" style="margin-bottom:1.5rem;">
+    <div class="section-label">AI Provider</div>
+    <p style="margin:0;font-size:14px;color:#b0aea5;line-height:1.7;">
+        Choose where the LLM calls go. The default <strong style="color:#faf9f5;">Local
+        (Ollama)</strong> keeps everything on this computer — no network calls,
+        no third party sees your facts or outlines. Bring Your Own Key (BYOK)
+        routes generation to a cloud provider via your API key.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+    # ── Provider pill ─────────────────────────────────────────────────────────
+    _provider = st.session_state.get("byok_provider", "local")
+    st.pills(
+        "Provider",
+        ["local", "xai"],
+        default=_provider,
+        key="byok_provider",
+        format_func=lambda x: {
+            "local": "🏠 Local (Ollama, on this computer)",
+            "xai":   "☁️ Grok (xAI, your API key)",
+        }[x],
+        label_visibility="collapsed",
+    )
+    _provider_now = st.session_state.get("byok_provider", "local")
+
+    # ── BYOK fields, only shown when not on local ─────────────────────────────
+    if _provider_now == "xai":
+        st.markdown("""
+<div class="irac-card" style="border-left:3px solid #ef4444;
+     background:rgba(239,68,68,0.06);padding:14px 18px;margin:1rem 0 1.25rem 0;">
+    <div style="font-family:Poppins,sans-serif;font-size:11px;font-weight:700;
+                letter-spacing:0.12em;text-transform:uppercase;color:#ef4444;
+                margin-bottom:6px;">⚠️ Privacy notice</div>
+    <div style="font-family:Lora,serif;font-size:13.5px;color:#e8e6dc;line-height:1.7;">
+        Your facts, drafts, and any injected outline excerpts will be sent to
+        <strong>xAI</strong> with every request. xAI's terms allow them to
+        retain payloads. <strong>Do not enable "Mine" outline mode under
+        BYOK</strong> if your uploaded outlines are commercial copyrighted
+        material — that would send them to a third party.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+        # Auto-flip outline_source away from "mine" when BYOK turns on, just once.
+        if (st.session_state.get("outline_source") == "mine"
+                and not st.session_state.get("_byok_outline_flipped")):
+            st.session_state["outline_source"] = "default"
+            st.session_state["_byok_outline_flipped"] = True
+            st.toast(
+                "Outline source switched from Mine → Built-in to keep your "
+                "uploaded outlines off the network.",
+                icon="🔒",
+            )
+
+        col_key, col_show = st.columns([4, 1])
+        with col_key:
+            st.text_input(
+                "API Key",
+                key="byok_api_key",
+                type="password",
+                placeholder="xai-…",
+                help="Get one at https://console.x.ai/. Stored locally in "
+                     "~/.iracmaker/preferences.json — never transmitted.",
+            )
+        with col_show:
+            st.markdown("<br>", unsafe_allow_html=True)
+            _saved_now = st.session_state.get("byok_api_key", "")
+            if _saved_now:
+                st.markdown(
+                    f'<div style="font-family:Poppins,sans-serif;font-size:11px;'
+                    f'color:#788c5d;font-weight:600;letter-spacing:0.06em;'
+                    f'text-transform:uppercase;text-align:center;padding-top:6px;">'
+                    f"✓ Saved ({len(_saved_now)} chars)"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+        # Model picker
+        _grok_models = [
+            "grok-4-fast-non-reasoning",
+            "grok-4-fast-reasoning",
+            "grok-4",
+            "grok-3",
+            "grok-3-fast",
+            "grok-3-mini",
+            "grok-code-fast-1",
+        ]
+        _curr_model = st.session_state.get("byok_model", "grok-4-fast-non-reasoning")
+        if _curr_model not in _grok_models:
+            _grok_models.insert(0, _curr_model)
+        st.selectbox(
+            "Model",
+            _grok_models,
+            index=_grok_models.index(_curr_model),
+            key="byok_model",
+            help=(
+                "grok-4-fast-non-reasoning — cheapest, fastest, fine for IRAC drafting. "
+                "grok-4-fast-reasoning — better for grading and long essays. "
+                "grok-4 — best quality, slower and more expensive."
+            ),
+        )
+
+        st.text_input(
+            "Base URL",
+            key="byok_base_url",
+            help="OpenAI-compatible endpoint. xAI: https://api.x.ai/v1. "
+                 "You can also point this at OpenAI, Together, Groq, etc.",
+        )
+
+        col_test, col_clear = st.columns([2, 1])
+        with col_test:
+            if st.button("Test connection", type="primary", use_container_width=True,
+                         disabled=not st.session_state.get("byok_api_key", "").strip()):
+                with st.spinner("Sending a 4-token probe..."):
+                    ok, msg = llm_client.test_connection()
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+        with col_clear:
+            if st.button("Clear key", use_container_width=True,
+                         disabled=not st.session_state.get("byok_api_key", "").strip()):
+                st.session_state["byok_api_key"] = ""
+                st.rerun()
+
+    else:
+        # Local mode active — show a friendly status card.
+        st.markdown("""
+<div class="irac-card irac-card-green" style="padding:14px 18px;margin:1rem 0;">
+    <div class="section-label" style="color:#788c5d;">Active provider: Local (Ollama)</div>
+    <div style="font-family:Lora,serif;font-size:13.5px;color:#b0aea5;line-height:1.7;">
+        All generation runs on this computer using the <code style="background:#0d0d0c;
+        padding:1px 5px;border-radius:3px;color:#e8e6dc;">irac-maker</code> Ollama model.
+        No API keys needed. No network calls. Switch to BYOK above only if you want
+        a faster/stronger cloud model and accept the privacy trade-off.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# TAB 12 — ABOUT
 # ════════════════════════════════════════════════════════════════════════════════
 with tab_about:
     # ── Modes (single-column stack) ────────────────────────────────────────────
@@ -1742,6 +1919,12 @@ with tab_about:
         <div class="section-label" style="color:#b0aea5;">History</div>
         <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
             Every IRAC and Case Brief you generate is auto-saved locally. Search, reopen, or delete past entries — nothing is ever sent off this computer.
+        </div>
+    </div>
+    <div class="irac-card" style="padding:16px 18px;border-left:3px solid #b0aea5;">
+        <div class="section-label" style="color:#b0aea5;">Settings (BYOK)</div>
+        <div style="font-family:Lora,serif;font-size:14px;color:#b0aea5;line-height:1.6;">
+            Optional. Switch from the local Ollama model to a cloud LLM (Grok via xAI's API key). Faster and often higher-quality, but breaks the local-only privacy contract — your facts get sent to xAI. Disabled by default.
         </div>
     </div>
 </div>

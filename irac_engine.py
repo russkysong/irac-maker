@@ -1,5 +1,6 @@
 import json
-import ollama
+import ollama  # used only by check_model_ready()'s ollama.list() probe
+import llm_client  # provider-agnostic chat() — dispatches to Ollama or BYOK
 from models import (
     IRRACOutput, DualIRAC, IRACFeedback, CaseBrief,
     IssueSpottingResult, EssayFeedback, MBEQuestion,
@@ -545,7 +546,7 @@ def _chat(system: str | None, user: str, use_json: bool = True) -> dict:
     }
     if use_json:
         kwargs["format"] = "json"
-    return ollama.chat(**kwargs)
+    return llm_client.chat(**kwargs)
 
 
 def _build_generate_prompt(facts: str, area: str, outline_source: str = "default") -> str:
@@ -596,7 +597,7 @@ def _build_generate_prompt(facts: str, area: str, outline_source: str = "default
 def generate_irreac(facts: str, area: str = "Contracts",
                     outline_source: str = "default") -> IRRACOutput:
     prompt = _build_generate_prompt(facts, area, outline_source)
-    resp = ollama.chat(
+    resp = llm_client.chat(
         model=MODEL_NAME,
         messages=[{"role": "user", "content": prompt}],
         format="json",
@@ -635,7 +636,7 @@ def stream_irreac(facts: str, area: str = "Contracts",
     prompt = _build_generate_prompt(facts, area, outline_source)
     # NOTE: format="json" + stream=True buffers the entire response before yielding
     # any tokens, defeating streaming. We omit format here and parse JSON manually.
-    stream = ollama.chat(
+    stream = llm_client.chat(
         model=MODEL_NAME,
         messages=[{"role": "user", "content": prompt}],
         stream=True,
@@ -728,7 +729,7 @@ def generate_dual_irac(facts: str, area: str = "Contracts") -> DualIRAC:
     means the caller can also stream each side independently for better UX.
     """
     def _gen(prompt: str) -> IRRACOutput:
-        resp = ollama.chat(
+        resp = llm_client.chat(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
             format="json",
@@ -802,7 +803,7 @@ def generate_default_outline(area: str) -> str:
     Called by default_outlines.get_or_generate() on first request per area.
     """
     prompt = DEFAULT_OUTLINE_PROMPT.format(area=area)
-    resp = ollama.chat(
+    resp = llm_client.chat(
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": DEFAULT_OUTLINE_SYSTEM},
@@ -846,7 +847,7 @@ def generate_hypo(
         area=area, topic_line=topic_line, complexity=complexity,
         call=call, call_hint=call_hint,
     )
-    resp = ollama.chat(
+    resp = llm_client.chat(
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": HYPO_SYSTEM},
@@ -864,7 +865,7 @@ def generate_mbe_question(area: str = "Contracts", difficulty: str = "Medium") -
     the JSON has 4 choices + 4 explanations.
     """
     prompt = MBE_PROMPT.format(area=area, difficulty=difficulty)
-    resp = ollama.chat(
+    resp = llm_client.chat(
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": MBE_SYSTEM},
@@ -885,7 +886,7 @@ def grade_essay(facts: str, area: str, essay: str) -> EssayFeedback:
     prompt = ESSAY_PROMPT.format(
         area=area, facts=facts.strip(), essay=essay.strip() or "(empty)",
     )
-    resp = ollama.chat(
+    resp = llm_client.chat(
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": ESSAY_SYSTEM},
@@ -936,7 +937,7 @@ def stream_zoom_out(facts: str, area: str):
     so the UI can render a live progress bar and incremental text.
     """
     prompt = ZOOM_OUT_PROMPT.format(area=area, facts=facts.strip())
-    stream = ollama.chat(
+    stream = llm_client.chat(
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": ZOOM_OUT_SYSTEM},
@@ -983,7 +984,7 @@ _BRIEF_SECTION_LABELS = {
 def generate_case_brief(text: str) -> CaseBrief:
     """Non-streaming case brief generation. Used as the truncation-fallback path."""
     prompt = CASE_BRIEF_PROMPT.format(text=text.strip())
-    resp = ollama.chat(
+    resp = llm_client.chat(
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": CASE_BRIEF_SYSTEM},
@@ -1007,7 +1008,7 @@ def stream_case_brief(text: str):
       ("done",   CaseBrief)    — generation complete, parsed result
     """
     prompt = CASE_BRIEF_PROMPT.format(text=text.strip())
-    stream = ollama.chat(
+    stream = llm_client.chat(
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": CASE_BRIEF_SYSTEM},

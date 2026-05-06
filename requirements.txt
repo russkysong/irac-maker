@@ -4,3 +4,6 @@ pydantic>=2.0.0
 fpdf2>=2.7.9
 pypdf>=4.0.0
 python-docx>=1.1.0
+# Optional: BYOK via xAI Grok / any OpenAI-compatible endpoint.
+# Required only when the Settings tab's provider is set to a cloud model.
+openai>=1.0.0
