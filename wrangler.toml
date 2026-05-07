@@ -1,0 +1,10 @@
+# Cloudflare Pages config for the static landing page (irac-maker.pages.dev).
+#
+# We don't have a build step — `index.html` and its sibling files are served
+# straight from the repo root. The Python sources (app.py, components.py,
+# etc.) get copied to the CDN too but are inert text — Cloudflare Pages
+# does not execute them. The Streamlit app itself runs locally on the
+# user's machine via Ollama; this static page is just the marketing site.
+name = "irac-maker"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "."
