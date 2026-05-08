@@ -1,4 +1,5 @@
 import html
+import os
 from datetime import datetime, timezone
 
 import streamlit as st
@@ -13,6 +14,17 @@ from irac_engine import (
     socratic_next_question, check_model_ready, AREAS_OF_LAW,
 )
 from export import export_to_pdf
+
+# ── Hosted-mode detection ─────────────────────────────────────────────────────
+# Streamlit Community Cloud sets env vars from .streamlit/secrets.toml or
+# the Settings UI. When we set `IRAC_MAKER_HOSTED = "1"` there, this flag
+# flips True, which:
+#   • Skips the Ollama warm-up (Ollama isn't installed on Streamlit Cloud).
+#   • Defaults outline_source to "none" (no local outline injection).
+#   • Forces visitors to provide their own xAI/OpenAI API key via Settings
+#     before any generation runs (BYOK-only).
+#   • Shows a banner explaining the privacy trade-off vs the local install.
+HOSTED = os.environ.get("IRAC_MAKER_HOSTED", "").strip().lower() in ("1", "true", "yes")
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="IRAC Maker", page_icon="⚖️", layout="wide")
@@ -41,10 +53,12 @@ def _safe_area(value, default: str = "Contracts") -> str:
 def _model_ready_cached() -> bool:
     """Validate the active LLM provider and warm up the local model if applicable.
 
-    Two paths:
-      • BYOK active (provider != "local" in saved prefs) — skip Ollama
-        entirely. The user might not even have Ollama installed. Trust their
-        Settings setup; bad keys will surface in `_xai_chat` with clear errors.
+    Three paths:
+      • Hosted mode (`IRAC_MAKER_HOSTED=1`) — Ollama isn't installed on the
+        cloud host. Skip every Ollama check; visitors must BYOK their own
+        key via Settings, which is enforced separately in the welcome gate.
+      • BYOK active locally (provider != "local" in saved prefs) — skip
+        Ollama entirely; bad keys surface in `_xai_chat` with clear errors.
       • Local Ollama — verify the model exists, then make a 4-token call to
         force it into VRAM. Subsequent requests within keep_alive=30m are
         instant instead of paying the cold-start cost on first user click.
@@ -52,6 +66,9 @@ def _model_ready_cached() -> bool:
     Cached via @st.cache_resource so this runs ONCE per session even though
     Streamlit reruns the whole script on every interaction.
     """
+    if HOSTED:
+        return True
+
     # Read prefs directly — session_state hasn't been hydrated yet at this
     # point in the script's execution.
     import preferences as _prefs_at_boot
@@ -100,7 +117,10 @@ DEFAULTS = {
     # Rule-outline source for IRAC generation (My Outlines tab pill).
     # "mine" = uploaded files, "default" = built-in AI-generated outlines,
     # "none" = no context, LLM uses its own training knowledge.
-    "outline_source": "default",
+    # In hosted mode we default to "none" — built-in outlines need Ollama
+    # (which the cloud host doesn't have) and uploaded outlines don't
+    # persist across Streamlit Cloud restarts.
+    "outline_source": "none" if HOSTED else "default",
     # Current topic within current_area for hypo generation. Empty string
     # means "(any)" — the LLM picks a topic. Auto-resets when current_area
     # changes (see the validity guard right after the prefs hydrate block).
@@ -125,28 +145,37 @@ for k, v in DEFAULTS.items():
 # ── Persistent UI preferences ──────────────────────────────────────────────────
 # Load saved prefs and seed session_state for keys that aren't already set.
 # Saving happens via _persist_prefs() at the bottom of every script run.
+#
+# CRITICAL: in hosted mode we MUST NOT persist anything. Streamlit Community
+# Cloud's filesystem is shared across visitors of the same instance, so a
+# saved preferences.json would expose one visitor's API key to the next.
+# We also skip the load step so visitors always start with clean defaults.
 _PERSISTED_KEYS = (
     "current_area", "cmp_mode", "outline_source",
     "byok_provider", "byok_api_key", "byok_base_url", "byok_model",
 )
-_saved_prefs = preferences.load()
-for _k in _PERSISTED_KEYS:
-    if _k in _saved_prefs and _k not in st.session_state:
-        st.session_state[_k] = _saved_prefs[_k]
+_saved_prefs = {} if HOSTED else preferences.load()
+if not HOSTED:
+    for _k in _PERSISTED_KEYS:
+        if _k in _saved_prefs and _k not in st.session_state:
+            st.session_state[_k] = _saved_prefs[_k]
 
-# Returning user — they already picked an area in a past session, so skip
-# the welcome gate. We use `setdefault` so reruns within a session don't
-# clobber a freshly-flipped flag.
-if "current_area" in _saved_prefs:
-    st.session_state["area_confirmed"] = True
+    # Returning user — they already picked an area in a past session, so skip
+    # the welcome gate. We use `setdefault` so reruns within a session don't
+    # clobber a freshly-flipped flag.
+    if "current_area" in _saved_prefs:
+        st.session_state["area_confirmed"] = True
 
 
 def _persist_prefs() -> None:
     """Write current values of persisted keys to disk if they've changed.
 
     Called once at the end of each script run. We compare against the snapshot
-    we loaded so we only hit disk when something actually moved.
+    we loaded so we only hit disk when something actually moved. No-op in
+    hosted mode (see comment above _PERSISTED_KEYS).
     """
+    if HOSTED:
+        return
     snapshot = {k: st.session_state.get(k) for k in _PERSISTED_KEYS
                 if k in st.session_state}
     if snapshot != _saved_prefs:
@@ -157,10 +186,74 @@ def _persist_prefs() -> None:
 # confirms an area-of-law pick. The welcome card below appears only on first
 # run — once `area_confirmed` flips True (via pick_area_dialog), the card
 # stops rendering and `_locked` becomes False. Library tabs are unaffected.
-_locked = not st.session_state.get("area_confirmed", False)
+#
+# In HOSTED mode we ALSO require a BYOK API key (no local Ollama available).
+# The same `_locked` flag governs both: an unconfigured hosted visitor sees
+# the welcome card with a key-prompt, and the action widgets stay disabled
+# until both an area is picked AND a key is in session_state.
+_byok_ready = bool(st.session_state.get("byok_api_key", "").strip()) if HOSTED else True
+_locked = (not st.session_state.get("area_confirmed", False)) or (not _byok_ready)
+
+if HOSTED:
+    # Persistent privacy notice at the very top of every page in the hosted
+    # build. Local installs never see this.
+    st.markdown(
+        '<div style="background:rgba(106,155,204,0.08);'
+        'border:1px solid rgba(106,155,204,0.25);border-radius:8px;'
+        'padding:10px 16px;margin-bottom:1rem;'
+        'font-family:Lora,serif;font-size:12.5px;line-height:1.55;color:#b0aea5;">'
+        '🌐 <strong style="color:#faf9f5;">Hosted demo</strong> — '
+        'data passes through your chosen LLM provider (xAI / OpenAI). '
+        "For local-first privacy, install IRAC Maker locally — "
+        '<a href="https://github.com/russkysong/irac-maker" target="_blank" '
+        'style="color:#6a9bcc;">see the GitHub repo</a>.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 if _locked:
-    st.markdown("""
+    if HOSTED and not _byok_ready:
+        # Hosted-mode gate: ask for an API key first, then area picker.
+        st.markdown("""
+<div class="irac-card irac-card-accent"
+     style="margin-bottom:1.25rem;padding:22px 26px;text-align:center;">
+    <div style="font-size:1.6rem;margin-bottom:0.4rem;">🔑</div>
+    <div style="font-family:Poppins,sans-serif;font-size:17px;font-weight:600;
+                color:#faf9f5;margin-bottom:0.5rem;">
+        Welcome — paste your API key to start
+    </div>
+    <div style="font-family:Lora,serif;font-size:13.5px;color:#b0aea5;
+                line-height:1.6;">
+        This hosted demo runs on every visitor's own LLM key — that way
+        you don't share a budget with strangers and your data only goes
+        to the provider <em>you</em> choose. Free xAI keys are available
+        at <a href="https://x.ai/api" target="_blank" style="color:#6a9bcc;">x.ai/api</a>.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+        _gate_col_l, _gate_col_form, _gate_col_r = st.columns([1, 4, 1])
+        with _gate_col_form:
+            _gate_key = st.text_input(
+                "API key",
+                type="password",
+                placeholder="xai-… or sk-…",
+                key="byok_api_key",
+                label_visibility="collapsed",
+            )
+            if _gate_key.strip():
+                # Default the rest of the BYOK config so the visitor doesn't
+                # have to wade through the Settings tab to use the demo.
+                st.session_state.setdefault("byok_provider", "xai")
+                st.session_state.setdefault("byok_base_url", "https://api.x.ai/v1")
+                st.session_state.setdefault("byok_model", "grok-4-fast-non-reasoning")
+                st.rerun()
+            st.caption(
+                "Keys live only in this browser session — never sent to "
+                "Streamlit, never persisted to disk."
+            )
+    else:
+        # Standard area-pick welcome (local install OR hosted-with-key-set).
+        st.markdown("""
 <div class="irac-card irac-card-accent"
      style="margin-bottom:1.25rem;padding:22px 26px;text-align:center;">
     <div style="font-size:1.6rem;margin-bottom:0.4rem;">👋</div>
@@ -176,16 +269,16 @@ if _locked:
     </div>
 </div>
 """, unsafe_allow_html=True)
-    _gate_col_l, _gate_col_pick, _gate_col_r = st.columns([1, 2, 1])
-    with _gate_col_pick:
-        _gate_area = _safe_area(st.session_state.get("current_area"))
-        if st.button(
-            f"⚖️ Pick Area of Law — currently {_gate_area}",
-            key="gate_area_btn",
-            use_container_width=True,
-            type="primary",
-        ):
-            C.pick_area_dialog("current_area")
+        _gate_col_l, _gate_col_pick, _gate_col_r = st.columns([1, 2, 1])
+        with _gate_col_pick:
+            _gate_area = _safe_area(st.session_state.get("current_area"))
+            if st.button(
+                f"⚖️ Pick Area of Law — currently {_gate_area}",
+                key="gate_area_btn",
+                use_container_width=True,
+                type="primary",
+            ):
+                C.pick_area_dialog("current_area")
     st.divider()
 
 # ── Topic validity guard ──────────────────────────────────────────────────────
